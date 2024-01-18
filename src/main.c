@@ -1,3 +1,11 @@
+/*
+    Philosophy:
+    Code the game. Nothing more.
+
+    "just type the code for those entities." - Jon Blow
+    https://youtu.be/4oky64qN5WI?t=415
+*/
+
 #include <stdio.h>
 
 #include "raylib.h"
@@ -5,6 +13,7 @@
 
 #define WHITE_SEMI_TRANSPARENT (Color){255, 255, 255, 64}
 #define GREEN_SEMI_TRANSPARENT (Color){0, 255, 50, 32}
+#define LIGHTBLUE (Color){50, 100, 200, 150}
 
 const int worldWidth = 32*14;
 const int worldHeight = 32*8;
@@ -29,8 +38,7 @@ enum Direction {
 
 enum AnimationState {
     IDLE,
-    WALK,
-    RUN
+    MOVE
 };
 
 typedef struct {
@@ -45,6 +53,7 @@ typedef struct {
     Vector2 position; // grid coordinate position
     Texture2D texture;
     Animation animation;
+    enum AnimationState animationState;
     enum Direction direction;
     bool isMoving;
     Vector2 targetPosition;
@@ -118,10 +127,11 @@ void entityController(Entity *en) {
     Vector2 movement = directionToVector2(en->direction);
     if (!Vector2Equals((movement), (Vector2){0}) && shouldMove)  {
         printf("MOVE!\n");
-        printf("X: %2.0f -> %2.0f\n", en->position.x, en->position.x+1.0f);
-        printf("Y: %2.0f -> %2.0f\n", en->position.y, en->position.y+1.0f);
+        // printf("X: %2.0f -> %2.0f\n", en->position.x, en->position.x+1.0f);
+        // printf("Y: %2.0f -> %2.0f\n", en->position.y, en->position.y+1.0f);
         en->targetPosition = Vector2Add(en->position, movement);
         en->isMoving = true;
+        en->animationState = MOVE;
     }
 }
 
@@ -145,6 +155,7 @@ void moveEntity(Entity *en) {
     if (distance < POSITION_THRESHOLD) {
         en->position = en->targetPosition;  // Ensure exact position when close
         en->isMoving = false;
+        en->animationState = IDLE;
         // printf("Moved entity to X: %2.0f -> %2.0f\n", en->position.x, en->position.x+1.0f);
     }
 }
@@ -163,11 +174,47 @@ void updateAnimationFrame(Animation *anim) {
 void renderEntity(Entity *en) {
 
     Vector2 gridPosition = Vector2Multiply(en->position, (Vector2){TILE_SIZE, TILE_SIZE});
-    DrawRectangleLines(en->position.x * TILE_SIZE, en->position.y * TILE_SIZE, TILE_SIZE, TILE_SIZE, GREEN_SEMI_TRANSPARENT);
+    DrawRectangleLines(en->position.x * TILE_SIZE, (SPRITE_SIZE/4) + en->position.y * TILE_SIZE, TILE_SIZE, TILE_SIZE, GREEN_SEMI_TRANSPARENT);
 
     gridPosition = Vector2Subtract(gridPosition, (Vector2){SPRITE_SIZE/4, SPRITE_SIZE/4});
 
-    DrawTextureRec(en->texture, (Rectangle){en->animation.curFrame * SPRITE_SIZE, en->direction * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE}, gridPosition, WHITE);
+    // printf("%i\n", en->animation.yOffset);
+    DrawTextureRec(en->texture, (Rectangle){en->animation.curFrame * SPRITE_SIZE, en->animation.yOffset + en->direction * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE}, gridPosition, WHITE);
+}
+
+Entity createZorEntity(Vector2 pos) {
+    Entity en = { 0 };
+    // en.animation.maxFrameTime = 0.02f; // run/walk frametime
+    en.texture = LoadTexture("res/zor/zor_spritesheet.png");
+    en.position = pos;
+    return en;
+}
+
+void updateZorAnimation(Entity* zor) {
+
+    switch (zor->animationState) {
+        case IDLE:
+            zor->animation.maxFrameTime = 0.0f;
+            zor->animation.yOffset = 0;
+            break;
+        case MOVE:
+            zor->animation.maxFrameTime = 0.02f;
+            zor->animation.yOffset = 2048;
+            break;
+        default:
+            zor->animation.maxFrameTime = 0.0f;
+            zor->animation.yOffset = 0;
+            break;
+    }
+
+    float* ft = &zor->animation.curFrameTime;
+    *ft += GetFrameTime();
+    int* cf = &zor->animation.curFrame;
+
+    if (*ft >= zor->animation.maxFrameTime) {
+        *cf = (*cf % zor->animation.nFrames) + 1;
+        *ft = 0.0f;
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -192,11 +239,14 @@ int main(int argc, char* argv[]) {
     fantano.texture = LoadTexture("res/fantano/fantano_idle.png");
     fantano.position = (Vector2){0.0f, 0.0f};
 
-    Entity zor = {0};
-    zor.texture = LoadTexture("res/zor/zor_idle.png");
-    zor.position = (Vector2){2.0f, 0.0f};
+    Entity cyhar = {0};
+    cyhar.texture = LoadTexture("res/cyhar/cyhar_idle.png");
+    cyhar.position = (Vector2){0.0f, 3.0f};
+
+    Entity zor = createZorEntity((Vector2){5.0f, 5.0f});
 
     Entity *playerEntity = {0};
+    // playerEntity = &zor;
     playerEntity = &zor;
 
     while (!WindowShouldClose()) { 
@@ -220,7 +270,9 @@ int main(int argc, char* argv[]) {
         moveEntity(playerEntity);
 
         updateAnimationFrame(&fantano.animation);
-        updateAnimationFrame(&zor.animation);
+        updateAnimationFrame(&cyhar.animation);
+        // updateAnimationFrame(&zor.animation);
+        updateZorAnimation(&zor);
 
         Vector2 camTarget = Vector2Multiply(playerEntity->position, (Vector2){TILE_SIZE, TILE_SIZE});
         camTarget = Vector2Add(camTarget, (Vector2){SPRITE_SIZE/4, SPRITE_SIZE/4});
@@ -237,11 +289,14 @@ int main(int argc, char* argv[]) {
 
             BeginMode2D(camera); 
             {
+                DrawRectangle(0, SPRITE_SIZE/4, 8 * TILE_SIZE, 8 * TILE_SIZE, LIGHTBLUE);
                 for (int x = 0; x < 8; x++) {
                     for (int y = 0; y < 8; y++) {
-                        DrawRectangleLines(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE, WHITE_SEMI_TRANSPARENT);
+                        DrawRectangleLines(x * TILE_SIZE, SPRITE_SIZE/4 + y * TILE_SIZE, TILE_SIZE, TILE_SIZE, WHITE_SEMI_TRANSPARENT);
                     }
                 }
+                DrawRectangleLines(0, SPRITE_SIZE/4, 8 * TILE_SIZE, 8 * TILE_SIZE, BLACK);
+                renderEntity(&cyhar);
                 renderEntity(&fantano);
                 renderEntity(&zor);
             }

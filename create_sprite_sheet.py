@@ -41,6 +41,7 @@ if __name__ == "__main__":
     # input_folder = "path/to/your/tmp/folder"
     # output_path = "path/to/your/output/sprite_sheet.png"
     input_folder = "/tmp"
-    output_path = "./bin/res/sprite_dumps/fantano_idle.png"
+    output_path = "./bin/res/sprite_dumps/cyhar_idle.png"
 
+    # use aseprite to concatenate sheets vertically
     create_sprite_sheet(input_folder, output_path)
