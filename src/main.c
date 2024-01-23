@@ -73,7 +73,7 @@ typedef struct {
     Vector2 position; // grid coordinate position
 } SpilledCup;
 
-Vector2 directionToVector2(enum Direction direction) {
+Vector2 direction_to_vector2(enum Direction direction) {
     switch (direction) {
         case DOWN:
             return (Vector2){0.0f, 1.0f};
@@ -97,9 +97,10 @@ Vector2 directionToVector2(enum Direction direction) {
     }
 }
 
-void entityController(Entity *en) {
+void control_entity(Entity *en) {
 
     if (en->isMoving) return;
+    en->animationState = IDLE;
 
     bool shouldMove = false;
 
@@ -138,7 +139,8 @@ void entityController(Entity *en) {
         shouldMove = true;
     }
 
-    Vector2 movement = directionToVector2(en->direction);
+    // this may be a bit scuffed. unecessary extra checks here?
+    Vector2 movement = direction_to_vector2(en->direction);
     if (!Vector2Equals((movement), (Vector2){0}) && shouldMove)  {
         // printf("MOVE!\n");
         // printf("X: %2.0f -> %2.0f\n", en->position.x, en->position.x+1.0f);
@@ -149,13 +151,15 @@ void entityController(Entity *en) {
     }
 }
 
-void moveEntity(Entity *en) {
+void move_entity(Entity *en) {
+    // move entity grid position
+    // (when entity is moving)
     if (!en->isMoving) return;
 
     // printf("%2.5f, %2.5f\n", en->position.x, en->position.y);
     // printf("%2.5f, %2.5f\n", en->position.x, en->position.y);
 
-    Vector2 movement = directionToVector2(en->direction);
+    Vector2 movement = direction_to_vector2(en->direction);
 
     // linear interpolation
     // en->position.x = Lerp(en->position.x, en->targetPosition.x, t);
@@ -174,7 +178,19 @@ void moveEntity(Entity *en) {
     }
 }
 
-void updateAnimationFrame(Animation *anim) {
+void move_entity_freely(Entity* en) {
+    // move entity (no grid involved)
+    if (!en->isMoving) return;
+
+    Vector2 movement = direction_to_vector2(en->direction);
+
+    en->position.x += movement.x * GetFrameTime() * GRID_MOVESPEED;
+    en->position.y += movement.y * GetFrameTime() * GRID_MOVESPEED;
+
+    en->isMoving = false;
+}
+
+void update_animation_frame(Animation *anim) {
     float* ft = &anim->curFrameTime;
     *ft += GetFrameTime();
     int* cf = &anim->curFrame;
@@ -185,19 +201,19 @@ void updateAnimationFrame(Animation *anim) {
     }
 }
 
-Vector2 PositionToGridPosition(Vector2 pos) {
+Vector2 position_to_grid_position(Vector2 pos) {
     return Vector2Subtract(Vector2Multiply(pos, (Vector2){TILE_SIZE, TILE_SIZE}), (Vector2){SPRITE_SIZE/4, SPRITE_SIZE/4});
 }
 
-void renderEntity(Entity *en) {
+void render_entity(Entity *en) {
 
-    Vector2 gridPosition = PositionToGridPosition(en->position);
+    Vector2 gridPosition = position_to_grid_position(en->position);
     // printf("%i\n", en->animation.yOffset);
     DrawCircle(gridPosition.x + SPRITE_SIZE/2, gridPosition.y + SPRITE_SIZE/2 + TILE_SIZE/2, 35.0f, BLACK_SEMI_TRANSPARENT);
     DrawTextureRec(en->texture, (Rectangle){en->animation.curFrame * SPRITE_SIZE, en->animation.yOffset + en->direction * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE}, gridPosition, WHITE);
 }
 
-Entity createZorEntity(Vector2 pos) {
+Entity create_zor_entity_instance(Vector2 pos) {
     Entity en = { 0 };
     // en.animation.maxFrameTime = 0.02f; // run/walk frametime
     en.texture = LOAD_ZOR_TEXTURE();
@@ -205,7 +221,7 @@ Entity createZorEntity(Vector2 pos) {
     return en;
 }
 
-void updateZorAnimation(Entity* zor) {
+void update_zor_animation(Entity* zor) {
 
     switch (zor->animationState) {
         case IDLE:
@@ -232,12 +248,12 @@ void updateZorAnimation(Entity* zor) {
     }
 }
 
-void CreateSpilledCup(Vector2 pos, int *counter, SpilledCup *cups) {
+void create_spilledcup_instance(Vector2 pos, int *counter, SpilledCup *cups) {
     cups[*counter] = (SpilledCup){pos};
     (*counter)++;
 }
 
-void DeleteSpilledCup(const int index, int *counter, SpilledCup* cups) {
+void delete_spilledcup(const int index, int *counter, SpilledCup* cups) {
     if (index >= *counter) {
         printf("Warning: Tried to delete spilled cup index: %i, instance counter: %i\n", index, *counter);
         return;
@@ -250,13 +266,13 @@ void DeleteSpilledCup(const int index, int *counter, SpilledCup* cups) {
     printf("Deleted spilled cup index: %i, %i instances left\n", index, *counter);
 }
 
-void renderSpilledCups(const int counter, const SpilledCup *cups, Texture2D tx) {
+void render_spilledcups(const int counter, const SpilledCup *cups, Texture2D tx) {
     for (int i = 0; i < counter; i++) {
-        DrawTextureRec(tx, (Rectangle){0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE}, PositionToGridPosition(cups[i].position), WHITE);
+        DrawTextureRec(tx, (Rectangle){0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE}, position_to_grid_position(cups[i].position), WHITE);
     }
 }
 
-int main(int argc, char* argv[]) {
+int main(/*int argc, char* argv[]*/) {
 
     // int windowWidth = 1280;
     // int windowHeight = 720;
@@ -284,18 +300,18 @@ int main(int argc, char* argv[]) {
     cyhar.texture = LOAD_CYHAR_TEXTURE();
     cyhar.position = (Vector2){3.0f, 3.0f};
 
-    Entity zor = createZorEntity((Vector2){5.0f, 5.0f});
+    Entity zor = create_zor_entity_instance((Vector2){5.0f, 5.0f});
 
     Entity *playerEntity = {0};
-    // playerEntity = &fantano;
     playerEntity = &zor;
+    // playerEntity = &fantano;
 
     SpilledCup spilledcups[MAX_INSTANCES];
     int spillecups_counter = 0;
     Texture2D spilledcupTexture = LOAD_SPILLEDCUP_TEXTURE();
 
-    CreateSpilledCup((Vector2){2.0f, 2.0f}, &spillecups_counter, spilledcups);
-    CreateSpilledCup((Vector2){3.0f, 1.0f}, &spillecups_counter, spilledcups);
+    create_spilledcup_instance((Vector2){2.0f, 2.0f}, &spillecups_counter, spilledcups);
+    create_spilledcup_instance((Vector2){3.0f, 1.0f}, &spillecups_counter, spilledcups);
 
 
     // DeleteSpilledCup(0, &spillecups_counter, spilledcups);
@@ -324,13 +340,14 @@ int main(int argc, char* argv[]) {
         }
 
         // update game logic
-        entityController(playerEntity);
-        moveEntity(playerEntity);
+        control_entity(playerEntity);
+        move_entity(playerEntity); // perhaps move_entities (once there is ai)
+        // move_entity_freely(playerEntity);
 
-        updateAnimationFrame(&fantano.animation);
-        updateAnimationFrame(&cyhar.animation);
+        update_animation_frame(&fantano.animation);
+        update_animation_frame(&cyhar.animation);
         // updateAnimationFrame(&zor.animation);
-        updateZorAnimation(&zor);
+        update_zor_animation(&zor);
 
         Vector2 camTarget = Vector2Multiply(playerEntity->position, (Vector2){TILE_SIZE, TILE_SIZE});
         camTarget = Vector2Add(camTarget, (Vector2){SPRITE_SIZE/4, SPRITE_SIZE/4});
@@ -356,11 +373,11 @@ int main(int argc, char* argv[]) {
 
                 DrawRectangleLines(0, SPRITE_SIZE/4, 8 * TILE_SIZE, 8 * TILE_SIZE, BLACK);
 
-                renderSpilledCups(spillecups_counter, spilledcups, spilledcupTexture);
+                render_spilledcups(spillecups_counter, spilledcups, spilledcupTexture);
 
-                renderEntity(&cyhar);
-                renderEntity(&fantano);
-                renderEntity(&zor);
+                render_entity(&cyhar);
+                render_entity(&fantano);
+                render_entity(&zor);
             }
             EndMode2D();
         }

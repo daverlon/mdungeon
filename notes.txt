@@ -1,0 +1,43 @@
+
+// maybe add water tile, etc
+enum TileState {
+  INVALID, // invalid tile or terrain
+  TERRAIN,
+  ENTITY_PLAYER,
+  ENTITY_ENEMY,
+  ITEM
+};
+
+for tile in tiles:
+  switch tile.state {
+    case INVALID:
+      break;
+    case TERRAIN:
+      break;
+    case ENTITY_PLAYER:
+      break;
+    default:
+      break; // invalid
+      
+  };
+  if tile.state == INVALID:
+    continue
+  elif tile.state 
+    
+**** maybe like this:
+
+seems unecessary to scan through 100x100 tiles for an extremely low 
+number of entities that are active
+
+so:
+go through each entity
+to check if entity is standing on an item:
+go through each item
+and comapre the coordinates
+  ** this opens up optimisation possibilities similar to grid-based collision systeom
+  ** dont worry about this, the game will almost certainly run fine
+problem: difficult to implement pathfinding/ai this way
+must get CREATIVE to implement this
+  
+
+

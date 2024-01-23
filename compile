@@ -2,11 +2,12 @@ echo -------------------
 echo Compilation started.
 echo -------------------
 
-gcc -Wall \
-    src/main.c \
-    -o bin/game \
-    -Idependencies/include \
-    -Ldependencies/lib \
+gcc -Wall                   \
+    -W                      \
+    src/main.c              \
+    -o bin/game             \
+    -Idependencies/include  \
+    -Ldependencies/lib      \
     -lraylib
 
 echo -------------------
