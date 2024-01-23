@@ -43,7 +43,7 @@ must get CREATIVE to implement this
 
 game loop idea (limiting scope):
   mystery dungeon roguelike
-  main dungeon has like 100 floors (with checkpoints or something)
+  main dungeon has like 100 floors (with checkpoints or something.. AND BOSSES)
   keep/lose items
   return home to sell/unlock stuff at shops etc
   some other dungeons for various things
