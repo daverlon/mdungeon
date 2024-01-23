@@ -223,6 +223,7 @@ Entity create_zor_entity_instance(Vector2 pos) {
 
 void update_zor_animation(Entity* zor) {
 
+    // higher fps seems to speed this up
     switch (zor->animationState) {
         case IDLE:
             zor->animation.maxFrameTime = 0.0f;
