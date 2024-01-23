@@ -261,9 +261,11 @@ int main(int argc, char* argv[]) {
     // int windowWidth = 1280;
     // int windowHeight = 720;
 
-    int windowWidth = 1920;
-    int windowHeight = 1080;
+    // int windowWidth = 1920;
+    // int windowHeight = 1080;
 
+    int windowWidth = GetScreenWidth();
+    int windowHeight = GetScreenHeight();
     InitWindow(windowWidth, windowHeight, "mDungeon");
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     SetTargetFPS(60);
@@ -296,8 +298,8 @@ int main(int argc, char* argv[]) {
     CreateSpilledCup((Vector2){3.0f, 1.0f}, &spillecups_counter, spilledcups);
 
 
-    DeleteSpilledCup(0, &spillecups_counter, spilledcups);
-    DeleteSpilledCup(0, &spillecups_counter, spilledcups);
+    // DeleteSpilledCup(0, &spillecups_counter, spilledcups);
+    // DeleteSpilledCup(0, &spillecups_counter, spilledcups);
 
 
     for (int i = 0; i < spillecups_counter; i++) {
