@@ -39,13 +39,23 @@ and comapre the coordinates
 problem: difficult to implement pathfinding/ai this way
 must get CREATIVE to implement this
   
+***
+only smart npcs are required to have smart ai
+consider not having player levels/progression (it probably should have it though...)
+main focus is items & moves?
+* the game is supposed to be difficult
 
+*** you can actually do this (i think) ***
+*** focus! ***
+*** write many notes as they enter your mind!
 
-game loop idea (limiting scope):
+game loop idea (limit scope):
   mystery dungeon roguelike
   main dungeon has like 100 floors (with checkpoints or something.. AND BOSSES)
+  side dungeons for missions/training/items/etc? (dojo?)
   keep/lose items
   return home to sell/unlock stuff at shops etc
   some other dungeons for various things
   
   *focus on gameplay > story (more accessible for me to develop i guess)
+  *on certain floors 'bosses' are present
