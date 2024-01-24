@@ -38,18 +38,36 @@ and comapre the coordinates
   ** dont worry about this, the game will almost certainly run fine
 problem: difficult to implement pathfinding/ai this way
 must get CREATIVE to implement this
-  
+
+*** development challenges ***
+  . procedural generation
+  2. path finding
+  3. audio
+  4. entities
+  5. items
+  6. progression
+  7. everything
 ***
-only smart npcs are required to have smart ai
-consider not having player levels/progression (it probably should have it though...)
-main focus is items & moves?
-* the game is supposed to be difficult
+  
+*** notes ***
+  only smart npcs are required to have smart ai
+  consider not having player levels/progression (it probably should have it though...)
+  main focus is items & moves?
+  * the game is supposed to be difficult
+  day/night cycle (mobs change)
+  seasonal cycle (mobs and environment changes)
+    - possibly affecting player & mobs stats
+    - item changes/spawns
+      - nullify certain item effects?
+    - think of possible ways environment can affect ALL entities
+    - LOTSA IDEAS!
+***
 
 *** you can actually do this (i think) ***
 *** focus! ***
 *** write many notes as they enter your mind!
 
-game loop idea (limit scope):
+*** game loop idea (limit scope):
   mystery dungeon roguelike
   main dungeon has like 100 floors (with checkpoints or something.. AND BOSSES)
   side dungeons for missions/training/items/etc? (dojo?)
