@@ -4,6 +4,7 @@ echo -------------------
 
 gcc -Wall                   \
     -W                      \
+    -Wpedantic              \
     src/main.c              \
     -o bin/game             \
     -Idependencies/include  \
