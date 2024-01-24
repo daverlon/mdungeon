@@ -83,9 +83,13 @@ typedef struct {
 typedef struct {
     enum ItemType type;
     Vector2 position; // grid coordinate position
+    // for player to ignore item once dropped
+    // enemies should still be able to pickup the item (perhaps some won't want to though)
+    bool preventPickup;  // default 0: (0=can pickup)
 } Item;
-// idea: BasicItem (items with consistent effects)
-//       SpecialItem (items that may change? this seems weird..)
+// ideas:   BasicItem (items with consistent effects)
+//          SpecialItem (items that may change? this seems weird..)
+//          ItemWear (wear value for each item (such that they are disposable? probably not fun)) 
 
 Vector2 direction_to_vector2(enum Direction direction) {
     switch (direction) {
@@ -273,21 +277,21 @@ void create_item_instance(Item item, int *counter, Item *items) {
 
 void delete_item(const int index, int *counter, Item *items) {
     if (index >= *counter) {
-        printf("Warning: Tried to delete spilled cup index: %i, instance counter: %i\n", index, *counter);
+        printf("Warning: Tried to delete item index: %i, instance counter: %i\n", index, *counter);
         return;
     }
 
     for (int i = index; i < *counter; i++) {
-        items[index] = items[index+1];
+        items[i] = items[i+1];
     }
     (*counter)--;
-    printf("Deleted spilled cup index: %i, %i instances left on map.\n", index, *counter);
+    printf("Deleted item index: %i, %i instances left on map.\n", index, *counter);
 }
 
 // all items should probably not be on 1 texture.
 // only certain items can appear at a time
 // todo: un-generic this function
-void render_items(int *counter, Item *items, Texture2D tx) {
+void render_items_on_map(int *counter, Item *items, Texture2D tx) {
     for (int i = 0; i < *counter; i++) {
         switch (items[i].type) {
             default:
@@ -303,29 +307,69 @@ void render_items(int *counter, Item *items, Texture2D tx) {
     }
 }
 
-void pickup_item(const int index, Item *items, Entity *entity) {
+void pickup_item(const int index, Item *mapItems, Entity *entity) {
     // add item to entity inventory
     // this should be called with delete_item called after
     if (entity->inventoryItemCount < INVENTORY_SIZE) {
-        entity->inventory[entity->inventoryItemCount] = items[index].type;
+        entity->inventory[entity->inventoryItemCount] = mapItems[index].type;
         entity->inventoryItemCount++;
     }
 }
 
-void scan_items_for_pickup(int *counter, Item *items, Entity *entity) {
+void scan_items_for_pickup(int *counter, Item *mapItems, Entity *entity) {
     for (int i = 0; i < *counter; i++) {
-        Item *item = &items[i];
+        Item *item = &mapItems[i];
         if (Vector2Equals(item->position, entity->position)) {
-            pickup_item(i, items, entity);
-            delete_item(i, counter, items);
-            printf("Entity item pickup.\n");
+            if (!item->preventPickup) {
+                pickup_item(i, mapItems, entity);
+                delete_item(i, counter, mapItems);
+                printf("Entity item pickup.\n");
+            }
+        } 
+        else {
+            if (item->preventPickup) {
+                item->preventPickup = false;
+            }
         }
     }
+}
+
+void delete_item_from_entity_inventory(const int index, Entity* entity) {
+    if (index >= entity->inventoryItemCount) {
+        printf("Warning: Tried to delete inventory item index: %i, item counter: %i\n", index, entity->inventoryItemCount);
+        return;
+    }
+
+    for (int i = index; i < entity->inventoryItemCount; i++) {
+        entity->inventory[i] = entity->inventory[i+1];
+    }
+    entity->inventoryItemCount--;
+    printf("Deleted inventory item index: %i, %i items remaining.\n", index, entity->inventoryItemCount);
+}
+
+void drop_item(const int index, Entity* entity, int *mapItemCounter, Item *mapItems) {
+    if (entity->isMoving) {
+        printf("Tried to drop item while entity is moving.\n");
+        return;
+    }
+    // check if item already exists at current position 
+    for (int i = 0; i < *mapItemCounter; i++) {
+        if (Vector2Equals(entity->position, mapItems[i].position)) {
+            printf("Tried to drop item on top of existing item.\n");
+            return;
+        }
+    }
+    mapItems[*mapItemCounter] = (Item){entity->inventory[index], entity->position, true};
+    (*mapItemCounter)++;
+    delete_item_from_entity_inventory(index, entity);
 }
 
 void render_player_inventory(Entity *player) {
     // for debug/development purposes
     const int c = player->inventoryItemCount;
+    const int yOffset = 100;
+    const int gap = 30;
+    DrawText("Inventory", 10, yOffset - gap, 24, WHITE);
     for (int i = 0; i < c; i++) {
         switch (player->inventory[i]) {
             default:
@@ -335,8 +379,13 @@ void render_player_inventory(Entity *player) {
                 printf("Error: ITEM_NOTHING present in player inventory.");
                 break;
             case ITEM_SPILLEDCUP:
-                printf("Item %i: ITEM_SPILLEDCUP\n", i);
+            {
+                char msg[20];
+                sprintf(msg, "%i: ITEM_SPILLEDCUP", i+1);
+                DrawText(msg, 10, yOffset + (i * gap), 24, WHITE);
+                // printf("Item %i: ITEM_SPILLEDCUP\n", i);
                 break;
+            }
         }
     }
 }
@@ -376,12 +425,12 @@ int main(void/*int argc, char* argv[]*/) {
     int mapItemCounter = 0;
     Texture2D itemTexture = LOAD_SPILLEDCUP_TEXTURE();
 
-    create_item_instance((Item){ITEM_SPILLEDCUP, (Vector2){2.0f, 2.0f}}, &mapItemCounter, mapItems);
-    create_item_instance((Item){ITEM_SPILLEDCUP, (Vector2){3.0f, 1.0f}}, &mapItemCounter, mapItems);
+    create_item_instance((Item){ITEM_SPILLEDCUP, (Vector2){2.0f, 2.0f}, false}, &mapItemCounter, mapItems);
+    create_item_instance((Item){ITEM_SPILLEDCUP, (Vector2){3.0f, 1.0f}, false}, &mapItemCounter, mapItems);
     // delete_item(0, &mapItemCounter, mapItems);
 
-
     while (!WindowShouldClose()) { 
+
         if (IsWindowResized()) {
             windowWidth = GetScreenWidth();
             windowHeight = GetScreenHeight();
@@ -402,6 +451,10 @@ int main(void/*int argc, char* argv[]*/) {
         control_entity(playerEntity);
         move_entity(playerEntity); // perhaps move_entities (once there is ai)
         // move_entity_freely(playerEntity);
+
+        if (IsKeyPressed(KEY_E) && playerEntity->inventoryItemCount > 0)  {
+            drop_item(playerEntity->inventoryItemCount-1, playerEntity, &mapItemCounter, mapItems);
+        }
 
         update_animation_frame(&fantano.animation);
         update_animation_frame(&cyhar.animation);
@@ -437,7 +490,7 @@ int main(void/*int argc, char* argv[]*/) {
                 DrawRectangleLines(0, SPRITE_SIZE/4, 8 * TILE_SIZE, 8 * TILE_SIZE, BLACK);
 
                 // render_spilledcups(spillecups_counter, spilledcups, spilledcupTexture);
-                render_items(&mapItemCounter, mapItems, itemTexture);
+                render_items_on_map(&mapItemCounter, mapItems, itemTexture);
 
                 render_entity(&cyhar);
                 render_entity(&fantano);
