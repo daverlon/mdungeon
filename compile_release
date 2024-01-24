@@ -1,0 +1,13 @@
+echo -------------------
+echo Compilation started.
+echo -------------------
+
+gcc src/main.c -O3          \
+    -o bin/game_release     \
+    -Idependencies/include  \
+    -Ldependencies/lib      \
+    -lraylib                \
+
+echo -------------------
+echo Finished compiling.
+echo -------------------

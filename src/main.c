@@ -21,7 +21,7 @@
 const int worldWidth = 32*14;
 const int worldHeight = 32*8;
 
-#define SPRITE_SIZE 256.0f
+#define SPRITE_SIZE 128.0f
 
 #define TILE_SIZE 128
 
@@ -220,20 +220,24 @@ void update_animation_frame(Animation *anim) {
 }
 
 Vector2 position_to_grid_position(Vector2 pos) {
-    return Vector2Subtract(Vector2Multiply(pos, (Vector2){TILE_SIZE, TILE_SIZE}), (Vector2){SPRITE_SIZE/4, SPRITE_SIZE/4});
+    return Vector2Subtract(Vector2Multiply(pos, (Vector2){TILE_SIZE, TILE_SIZE}), (Vector2){SPRITE_SIZE/2, SPRITE_SIZE/2});
 }
 
 void render_entity(Entity *en) {
     Vector2 gridPosition = position_to_grid_position(en->position);
     // printf("%i\n", en->animation.yOffset);
     DrawCircle(gridPosition.x + SPRITE_SIZE/2, gridPosition.y + SPRITE_SIZE/2 + TILE_SIZE/2, 35.0f, BLACK_SEMI_TRANSPARENT);
-    DrawTextureRec(en->texture, (Rectangle){en->animation.curFrame * SPRITE_SIZE, en->animation.yOffset + en->direction * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE}, gridPosition, WHITE);
+    DrawTextureRec(
+        en->texture, 
+        (Rectangle){en->animation.curFrame * SPRITE_SIZE, en->animation.yOffset + en->direction * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE}, 
+        gridPosition, 
+        WHITE);
 }
 
 Entity create_zor_entity_instance(Vector2 pos) {
     Entity en = { 0 };
     // en.animation.maxFrameTime = 0.02f; // run/walk frametime
-    en.texture = LOAD_ZOR_TEXTURE();
+    // en.texture = LOAD_ZOR_TEXTURE();
     en.position = pos;
     return en;
 }
@@ -248,7 +252,8 @@ void update_zor_animation(Entity* zor) {
             break;
         case MOVE:
             zor->animation.maxFrameTime = 0.02f;
-            zor->animation.yOffset = 2048.0f;
+            // zor->animation.yOffset = 2048.0f;
+            zor->animation.yOffset = SPRITE_SIZE * 8.0f;
             break;
         default:
             zor->animation.maxFrameTime = 0.0f;
@@ -408,14 +413,18 @@ int main(void/*int argc, char* argv[]*/) {
     camera.zoom = 1.0f;
 
     Entity fantano = {0};
-    fantano.texture = LOAD_FANTANO_TEXTURE();
+    // fantano.texture = LOAD_FANTANO_TEXTURE();
     fantano.position = (Vector2){0.0f, 0.0f};
 
     Entity cyhar = {0};
-    cyhar.texture = LOAD_CYHAR_TEXTURE();
+    // cyhar.texture = LOAD_CYHAR_TEXTURE();
     cyhar.position = (Vector2){3.0f, 3.0f};
 
     Entity zor = create_zor_entity_instance((Vector2){5.0f, 5.0f});
+    zor.texture = LOAD_ZOR_TEXTURE();
+    // SetTextureFilter(zor.texture, TEXTURE_FILTER_POINT);
+    // GenTextureMipmaps(zor.texture, 0);  // Disable mipmaps
+
 
     Entity *playerEntity = {0};
     playerEntity = &zor;
@@ -423,7 +432,7 @@ int main(void/*int argc, char* argv[]*/) {
 
     Item mapItems[MAX_INSTANCES];
     int mapItemCounter = 0;
-    Texture2D itemTexture = LOAD_SPILLEDCUP_TEXTURE();
+    // Texture2D itemTexture = LOAD_SPILLEDCUP_TEXTURE();
 
     create_item_instance((Item){ITEM_SPILLEDCUP, (Vector2){2.0f, 2.0f}, false}, &mapItemCounter, mapItems);
     create_item_instance((Item){ITEM_SPILLEDCUP, (Vector2){3.0f, 1.0f}, false}, &mapItemCounter, mapItems);
@@ -490,10 +499,10 @@ int main(void/*int argc, char* argv[]*/) {
                 DrawRectangleLines(0, SPRITE_SIZE/4, 8 * TILE_SIZE, 8 * TILE_SIZE, BLACK);
 
                 // render_spilledcups(spillecups_counter, spilledcups, spilledcupTexture);
-                render_items_on_map(&mapItemCounter, mapItems, itemTexture);
+                // render_items_on_map(&mapItemCounter, mapItems, itemTexture);
 
-                render_entity(&cyhar);
-                render_entity(&fantano);
+                // render_entity(&cyhar);
+                // render_entity(&fantano);
                 render_entity(&zor);
             }
             EndMode2D();
@@ -501,7 +510,7 @@ int main(void/*int argc, char* argv[]*/) {
         EndDrawing();
     }
 
-    UnloadTexture(itemTexture);
+    // UnloadTexture(itemTexture);
     UnloadTexture(zor.texture);
     UnloadTexture(cyhar.texture);
     UnloadTexture(fantano.texture);
