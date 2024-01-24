@@ -7,6 +7,7 @@
 */
 
 #include <stdio.h>
+// #include <string.h>
 
 #include "raylib.h"
 #include "raymath.h"
@@ -34,6 +35,9 @@ const int worldHeight = 32*8;
 #define LOAD_SPILLEDCUP_TEXTURE() (LoadTexture("res/items/spilledcup.png"))
 
 #define MAX_INSTANCES 32
+#define INVENTORY_SIZE 32
+
+// #define NPC_MAX_INVENTORY_SIZE 4
 
 enum Direction {
     DOWN,
@@ -49,6 +53,11 @@ enum Direction {
 enum AnimationState {
     IDLE,
     MOVE
+};
+
+enum ItemType {
+    ITEM_NOTHING,
+    ITEM_SPILLEDCUP
 };
 
 typedef struct {
@@ -67,11 +76,16 @@ typedef struct {
     enum Direction direction;
     bool isMoving;
     Vector2 targetPosition;
+    enum ItemType inventory[32];
+    int inventoryItemCount;
 } Entity;
 
 typedef struct {
+    enum ItemType type;
     Vector2 position; // grid coordinate position
-} SpilledCup;
+} Item;
+// idea: BasicItem (items with consistent effects)
+//       SpecialItem (items that may change? this seems weird..)
 
 Vector2 direction_to_vector2(enum Direction direction) {
     switch (direction) {
@@ -159,7 +173,7 @@ void move_entity(Entity *en) {
     // printf("%2.5f, %2.5f\n", en->position.x, en->position.y);
     // printf("%2.5f, %2.5f\n", en->position.x, en->position.y);
 
-    Vector2 movement = direction_to_vector2(en->direction);
+    const Vector2 movement = direction_to_vector2(en->direction);
 
     // linear interpolation
     // en->position.x = Lerp(en->position.x, en->targetPosition.x, t);
@@ -206,7 +220,6 @@ Vector2 position_to_grid_position(Vector2 pos) {
 }
 
 void render_entity(Entity *en) {
-
     Vector2 gridPosition = position_to_grid_position(en->position);
     // printf("%i\n", en->animation.yOffset);
     DrawCircle(gridPosition.x + SPRITE_SIZE/2, gridPosition.y + SPRITE_SIZE/2 + TILE_SIZE/2, 35.0f, BLACK_SEMI_TRANSPARENT);
@@ -249,40 +262,92 @@ void update_zor_animation(Entity* zor) {
     }
 }
 
-void create_spilledcup_instance(Vector2 pos, int *counter, SpilledCup *cups) {
-    cups[*counter] = (SpilledCup){pos};
+void create_item_instance(Item item, int *counter, Item *items) {
+    if (item.type == ITEM_NOTHING) {
+        printf("Error: Tried to create ITEM_NOTHING.\n");
+        return;
+    }
+    items[*counter] = item;
     (*counter)++;
 }
 
-void delete_spilledcup(const int index, int *counter, SpilledCup* cups) {
+void delete_item(const int index, int *counter, Item *items) {
     if (index >= *counter) {
         printf("Warning: Tried to delete spilled cup index: %i, instance counter: %i\n", index, *counter);
         return;
     }
 
     for (int i = index; i < *counter; i++) {
-        cups[index] = cups[index+1];
+        items[index] = items[index+1];
     }
     (*counter)--;
-    printf("Deleted spilled cup index: %i, %i instances left\n", index, *counter);
+    printf("Deleted spilled cup index: %i, %i instances left on map.\n", index, *counter);
 }
 
-void render_spilledcups(const int counter, const SpilledCup *cups, Texture2D tx) {
-    for (int i = 0; i < counter; i++) {
-        DrawTextureRec(tx, (Rectangle){0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE}, position_to_grid_position(cups[i].position), WHITE);
+// all items should probably not be on 1 texture.
+// only certain items can appear at a time
+// todo: un-generic this function
+void render_items(int *counter, Item *items, Texture2D tx) {
+    for (int i = 0; i < *counter; i++) {
+        switch (items[i].type) {
+            default:
+                break;
+            case ITEM_NOTHING:
+                // it should not be possible to iterate over ITEM_NOTHING.
+                printf("Error: Tried to render ITEM_NOTHING.");
+                break;
+            case ITEM_SPILLEDCUP:
+                DrawTextureRec(tx, (Rectangle){0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE}, position_to_grid_position(items[i].position), WHITE);
+                break;
+        }
     }
 }
 
-int main(/*int argc, char* argv[]*/) {
+void pickup_item(const int index, Item *items, Entity *entity) {
+    // add item to entity inventory
+    // this should be called with delete_item called after
+    if (entity->inventoryItemCount < INVENTORY_SIZE) {
+        entity->inventory[entity->inventoryItemCount] = items[index].type;
+        entity->inventoryItemCount++;
+    }
+}
 
-    // int windowWidth = 1280;
-    // int windowHeight = 720;
+void scan_items_for_pickup(int *counter, Item *items, Entity *entity) {
+    for (int i = 0; i < *counter; i++) {
+        Item *item = &items[i];
+        if (Vector2Equals(item->position, entity->position)) {
+            pickup_item(i, items, entity);
+            delete_item(i, counter, items);
+            printf("Entity item pickup.\n");
+        }
+    }
+}
 
-    // int windowWidth = 1920;
-    // int windowHeight = 1080;
+void render_player_inventory(Entity *player) {
+    // for debug/development purposes
+    const int c = player->inventoryItemCount;
+    for (int i = 0; i < c; i++) {
+        switch (player->inventory[i]) {
+            default:
+                printf("idk\n");
+                break;
+            case ITEM_NOTHING:
+                printf("Error: ITEM_NOTHING present in player inventory.");
+                break;
+            case ITEM_SPILLEDCUP:
+                printf("Item %i: ITEM_SPILLEDCUP\n", i);
+                break;
+        }
+    }
+}
 
-    int windowWidth = GetScreenWidth();
-    int windowHeight = GetScreenHeight();
+int main(void/*int argc, char* argv[]*/) {
+
+    int windowWidth = 1920;
+    int windowHeight = 1080;
+
+    // int windowWidth = GetScreenWidth();
+    // int windowHeight = GetScreenHeight();
     InitWindow(windowWidth, windowHeight, "mDungeon");
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     SetTargetFPS(60);
@@ -307,21 +372,14 @@ int main(/*int argc, char* argv[]*/) {
     playerEntity = &zor;
     // playerEntity = &fantano;
 
-    SpilledCup spilledcups[MAX_INSTANCES];
-    int spillecups_counter = 0;
-    Texture2D spilledcupTexture = LOAD_SPILLEDCUP_TEXTURE();
+    Item mapItems[MAX_INSTANCES];
+    int mapItemCounter = 0;
+    Texture2D itemTexture = LOAD_SPILLEDCUP_TEXTURE();
 
-    create_spilledcup_instance((Vector2){2.0f, 2.0f}, &spillecups_counter, spilledcups);
-    create_spilledcup_instance((Vector2){3.0f, 1.0f}, &spillecups_counter, spilledcups);
+    create_item_instance((Item){ITEM_SPILLEDCUP, (Vector2){2.0f, 2.0f}}, &mapItemCounter, mapItems);
+    create_item_instance((Item){ITEM_SPILLEDCUP, (Vector2){3.0f, 1.0f}}, &mapItemCounter, mapItems);
+    // delete_item(0, &mapItemCounter, mapItems);
 
-
-    // DeleteSpilledCup(0, &spillecups_counter, spilledcups);
-    // DeleteSpilledCup(0, &spillecups_counter, spilledcups);
-
-
-    for (int i = 0; i < spillecups_counter; i++) {
-        printf("%i: %2.5f, %2.5f\n", i, spilledcups[i].position.x, spilledcups[i].position.y);
-    }
 
     while (!WindowShouldClose()) { 
         if (IsWindowResized()) {
@@ -354,6 +412,10 @@ int main(/*int argc, char* argv[]*/) {
         camTarget = Vector2Add(camTarget, (Vector2){SPRITE_SIZE/4, SPRITE_SIZE/4});
         camera.target = camTarget;
 
+        scan_items_for_pickup(&mapItemCounter, mapItems, playerEntity);
+
+        render_player_inventory(playerEntity);
+
         // do rendering
         BeginDrawing();
         {
@@ -374,7 +436,8 @@ int main(/*int argc, char* argv[]*/) {
 
                 DrawRectangleLines(0, SPRITE_SIZE/4, 8 * TILE_SIZE, 8 * TILE_SIZE, BLACK);
 
-                render_spilledcups(spillecups_counter, spilledcups, spilledcupTexture);
+                // render_spilledcups(spillecups_counter, spilledcups, spilledcupTexture);
+                render_items(&mapItemCounter, mapItems, itemTexture);
 
                 render_entity(&cyhar);
                 render_entity(&fantano);
@@ -385,7 +448,7 @@ int main(/*int argc, char* argv[]*/) {
         EndDrawing();
     }
 
-    UnloadTexture(spilledcupTexture);
+    UnloadTexture(itemTexture);
     UnloadTexture(zor.texture);
     UnloadTexture(cyhar.texture);
     UnloadTexture(fantano.texture);
