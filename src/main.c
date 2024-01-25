@@ -12,6 +12,8 @@
 #include "raylib.h"
 #include "raymath.h"
 
+#include "dungeon.h"
+
 #define BLACK_SEMI_TRANSPARENT (Color){0, 0, 0, 128}
 #define WHITE_SEMI_TRANSPARENT (Color){255, 255, 255, 64}
 #define GREEN_SEMI_TRANSPARENT (Color){0, 255, 50, 32}
@@ -391,14 +393,15 @@ void render_player_inventory(Entity* player) {
 			break;
 		case ITEM_SPILLEDCUP:
 		{
-			sprintf_s(msgbuff, 32, "%i: ITEM_SPILLEDCUP", i + 1);
-			DrawText(msgbuff, 10, yOffset + (i * gap), 24, WHITE);
+			// sprintf_s(msgbuff, 32, "%i: ITEM_SPILLEDCUP", i + 1);
+			DrawText("Something", 10, yOffset + (i * gap), 24, WHITE);
+			// DrawText(msgbuff, 10, yOffset + (i * gap), 24, WHITE);
 			// printf("Item %i: ITEM_SPILLEDCUP\n", i);
 			break;
 		}
 		case ITEM_STICK:
 		{
-			sprintf_s(msgbuff, 32, "%i: ITEM_STICK", i + 1);
+			// sprintf_s(msgbuff, 32, "%i: ITEM_STICK", i + 1);
 			DrawText(msgbuff, 10, yOffset + (i * gap), 24, WHITE);
 			// printf("Item %i: ITEM_SPILLEDCUP\n", i);
 			break;
@@ -417,12 +420,14 @@ int main(void/*int argc, char* argv[]*/) {
 	InitWindow(windowWidth, windowHeight, "mDungeon");
 	SetWindowState(FLAG_WINDOW_RESIZABLE);
 	SetTargetFPS(60);
+	// SetWindowState(FLAG_WINDOW_MINIMIZED);
 
 	Camera2D camera = { 0 };
 	camera.offset = (Vector2){ windowWidth / 2, windowHeight / 2 };
 	camera.target = (Vector2){ 0.0f, 0.0f };
 	camera.rotation = 0.0f;
 	camera.zoom = 1.0f;
+	// camera.zoom = 0.1f;
 
 	Entity fantano = { 0 };
 	fantano.texture = LOAD_FANTANO_TEXTURE();
@@ -436,7 +441,6 @@ int main(void/*int argc, char* argv[]*/) {
 
 	Entity zor = create_zor_entity_instance((Vector2) { 5.0f, 5.0f });
 	zor.texture = LOAD_ZOR_TEXTURE();
-
 
 	Entity* playerEntity = { 0 };
 	playerEntity = &zor;
@@ -453,6 +457,8 @@ int main(void/*int argc, char* argv[]*/) {
 	create_item_instance((Item) { ITEM_STICK, (Vector2) { 5.0f, 3.0f }, false }, & mapItemCounter, mapItems);
 	// delete_item(0, &mapItemCounter, mapItems);
 
+	MapData map = generate_dungeon();
+
 	while (!WindowShouldClose()) {
 
 		if (IsWindowResized()) {
@@ -465,10 +471,14 @@ int main(void/*int argc, char* argv[]*/) {
 		if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
 			camera.offset = Vector2Add(camera.offset, GetMouseDelta());
 		}
+		if (IsKeyPressed(KEY_R)) {
+			map = generate_dungeon();
+		}
 		int scroll = GetMouseWheelMove();
 		if (scroll != 0.0f) {
 			camera.zoom += scroll * 0.1f;
-			printf("Scroll: %2.0f\n", camera.zoom);
+			if (camera.zoom <= 0.1f) camera.zoom = 0.1f;
+			// printf("Scroll: %2.0f\n", camera.zoom);
 		}
 
 		// update game logic
@@ -504,14 +514,15 @@ int main(void/*int argc, char* argv[]*/) {
 
 			BeginMode2D(camera);
 			{
-				DrawRectangle(0, SPRITE_SIZE / 4, 8 * TILE_SIZE, 8 * TILE_SIZE, LIGHTGREEN);
-				for (int x = 0; x < 8; x++) {
-					for (int y = 0; y < 8; y++) {
-						DrawRectangleLines(x * TILE_SIZE, SPRITE_SIZE / 4 + y * TILE_SIZE, TILE_SIZE, TILE_SIZE, WHITE_SEMI_TRANSPARENT);
-					}
-				}
+				// DrawRectangle(0, SPRITE_SIZE / 4, 8 * TILE_SIZE, 8 * TILE_SIZE, LIGHTGREEN);
+				// for (int x = 0; x < 8; x++) {
+				// 	for (int y = 0; y < 8; y++) {
+				// 		DrawRectangleLines(x * TILE_SIZE, SPRITE_SIZE / 4 + y * TILE_SIZE, TILE_SIZE, TILE_SIZE, WHITE_SEMI_TRANSPARENT);
+				// 	}
+				// }
+				// render_dungeon(&map);
 
-				DrawRectangleLines(0, SPRITE_SIZE / 4, 8 * TILE_SIZE, 8 * TILE_SIZE, BLACK);
+				// DrawRectangleLines(0, SPRITE_SIZE / 4, 8 * TILE_SIZE, 8 * TILE_SIZE, BLACK);
 
 				for (int i = 0; i < mapItemCounter; i++) {
 					switch (mapItems[i].type) {
