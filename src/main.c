@@ -246,19 +246,22 @@ void update_zor_animation(Entity* zor) {
 
     // higher fps seems to speed this up
     switch (zor->animationState) {
-        case IDLE:
+        case IDLE: {
             zor->animation.maxFrameTime = 0.0f;
             zor->animation.yOffset = 0.0f;
             break;
-        case MOVE:
+        }
+        case MOVE: {
             zor->animation.maxFrameTime = 0.02f;
             // zor->animation.yOffset = 2048.0f;
             zor->animation.yOffset = SPRITE_SIZE * 8.0f;
             break;
-        default:
+        }
+        default: {
             zor->animation.maxFrameTime = 0.0f;
             zor->animation.yOffset = 0.0f;
             break;
+        }
     }
 
     float* ft = &zor->animation.curFrameTime;
@@ -301,13 +304,15 @@ void render_items_on_map(int *counter, Item *items, Texture2D tx) {
         switch (items[i].type) {
             default:
                 break;
-            case ITEM_NOTHING:
+            case ITEM_NOTHING: {
                 // it should not be possible to iterate over ITEM_NOTHING.
                 printf("Error: Tried to render ITEM_NOTHING.");
                 break;
-            case ITEM_SPILLEDCUP:
+            }
+            case ITEM_SPILLEDCUP: {
                 DrawTextureRec(tx, (Rectangle){0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE}, position_to_grid_position(items[i].position), WHITE);
                 break;
+            }
         }
     }
 }
