@@ -18,4 +18,5 @@ typedef struct {
     enum TileType tiles[N_COLS][N_ROWS];
 } MapData;
 
-extern MapData generate_dungeon();
+// extern MapData generate_dungeon();
+// extern MapData generate_dungeon();

@@ -13,6 +13,7 @@
 #include "raymath.h"
 
 #include "dungeon.h"
+extern MapData generate_dungeon();
 
 #define BLACK_SEMI_TRANSPARENT (Color){0, 0, 0, 128}
 #define WHITE_SEMI_TRANSPARENT (Color){255, 255, 255, 64}
@@ -219,7 +220,7 @@ void update_animation_frame(Animation* anim) {
 	(*ft) += GetFrameTime();
 	int* cf = &anim->curFrame;
 
-	if ((*cf) >= &anim->nFrames) {
+	if ((*cf) >= anim->nFrames) {
 		(*cf) = 0;
 	}
 	else {
@@ -315,9 +316,9 @@ void delete_item(const int index, int* counter, Item* items) {
 // all items should probably not be on 1 texture.
 // only certain items can appear at a time
 // todo: un-generic this function
-void render_items_on_map(int* counter, Item* items, Texture2D tx) {
+// void render_items_on_map(int* counter, Item* items, Texture2D tx) {
 	// requires textures 
-}
+// }
 
 void pickup_item(const int index, Item* mapItems, Entity* entity) {
 	// add item to entity inventory
@@ -457,7 +458,9 @@ int main(void/*int argc, char* argv[]*/) {
 	create_item_instance((Item) { ITEM_STICK, (Vector2) { 5.0f, 3.0f }, false }, & mapItemCounter, mapItems);
 	// delete_item(0, &mapItemCounter, mapItems);
 
-	MapData map = generate_dungeon();
+	MapData map = { 0 };
+	map = generate_dungeon();
+
 
 	while (!WindowShouldClose()) {
 
