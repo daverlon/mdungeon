@@ -13,7 +13,7 @@
 #include "raymath.h"
 
 #include "dungeon.h"
-extern MapData generate_dungeon();
+// extern MapData generate_dungeon();
 
 #define BLACK_SEMI_TRANSPARENT (Color){0, 0, 0, 128}
 #define WHITE_SEMI_TRANSPARENT (Color){255, 255, 255, 64}
@@ -458,8 +458,9 @@ int main(void/*int argc, char* argv[]*/) {
 	create_item_instance((Item) { ITEM_STICK, (Vector2) { 5.0f, 3.0f }, false }, & mapItemCounter, mapItems);
 	// delete_item(0, &mapItemCounter, mapItems);
 
-	MapData map = { 0 };
-	map = generate_dungeon();
+	// MapData map = { 0 };
+	// map = generate_dungeon();
+	generate_small_groves_map();
 
 
 	while (!WindowShouldClose()) {
@@ -475,7 +476,8 @@ int main(void/*int argc, char* argv[]*/) {
 			camera.offset = Vector2Add(camera.offset, GetMouseDelta());
 		}
 		if (IsKeyPressed(KEY_R)) {
-			map = generate_dungeon();
+			// map = generate_dungeon();
+			generate_small_groves_map();
 		}
 		int scroll = GetMouseWheelMove();
 		if (scroll != 0.0f) {
