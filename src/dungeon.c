@@ -30,19 +30,39 @@ void connect_rooms(Room *room1, Room *room2, enum TileType tiles[MAX_COLS][MAX_R
             tiles[col][row] = TILE_CORRIDOR;
 
         // Introduce random bends
-        if (GetRandomValue(0, bend_chance) == 0) {
-            // Move vertically
-            if (row < center2_y) {
-                row++;
-            } else if (row > center2_y) {
-                row--;
+        if (bend_chance != 0) {
+            if (GetRandomValue(0, bend_chance) == 0) {
+                // Move vertically
+                if (row < center2_y) {
+                    row++;
+                } else if (row > center2_y) {
+                    row--;
+                }
+            } 
+            else {
+                // Move horizontally
+                if (col < center2_x) {
+                    col++;
+                } else if (col > center2_x) {
+                    col--;
+                }
             }
-        } else {
-            // Move horizontally
+        }
+        else {
+            // tiles[col][row] = TILE_CORRIDOR;
+
+            // Move toward the center of the second room
             if (col < center2_x) {
                 col++;
-            } else if (col > center2_x) {
+            }
+            else if (col > center2_x) {
                 col--;
+            }
+            else if (row < center2_y) {
+                row++;
+            }
+            else if (row > center2_y) {
+                row--;
             }
         }
     }

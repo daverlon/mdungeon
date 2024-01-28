@@ -473,9 +473,9 @@ int main(void/*int argc, char* argv[]*/) {
 		.room_height_min = 4,
 		.room_height_max = 10,
 
-		.dummy_chance = 4,
+		.dummy_chance = 0,
 		.extra_corridor_chance = 1,
-		.corridor_bend_chance = 1
+		.corridor_bend_chance = 0
 	};
 	// enum TileType** mapTiles = generate_map(cfg);
 	MapData mapData;
