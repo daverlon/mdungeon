@@ -460,8 +460,26 @@ int main(void/*int argc, char* argv[]*/) {
 
 	// MapData map = { 0 };
 	// map = generate_dungeon();
-	generate_small_groves_map();
+	MapGenerationConfig cfg = (MapGenerationConfig){
+		.n_sectors_x = 2,
+		.n_sectors_y = 2,
 
+		.sector_cols = 16,
+		.sector_rows = 16,
+
+		.room_width_min = 4, 
+		.room_width_max = 10, 
+
+		.room_height_min = 4,
+		.room_height_max = 10,
+
+		.dummy_chance = 4,
+		.extra_corridor_chance = 1,
+		.corridor_bend_chance = 1
+	};
+	// enum TileType** mapTiles = generate_map(cfg);
+	MapData mapData;
+	mapData = generate_map(cfg);
 
 	while (!WindowShouldClose()) {
 
@@ -477,7 +495,8 @@ int main(void/*int argc, char* argv[]*/) {
 		}
 		if (IsKeyPressed(KEY_R)) {
 			// map = generate_dungeon();
-			generate_small_groves_map();
+			// generate_small_groves_map();
+			mapData = generate_map(cfg);
 		}
 		int scroll = GetMouseWheelMove();
 		if (scroll != 0.0f) {

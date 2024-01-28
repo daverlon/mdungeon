@@ -4,112 +4,143 @@
 
 #include "dungeon.h"
 
-#define TILETYPE_PTR(name) enum TileType (*name)[N_ROWS]
-
-void print_dungeon(MapData *map) {
-
-    // printf("Sector W: %i\n", SECTOR_W);
-    // printf("Sector H: %i\n", SECTOR_H);
-
-	// // const enum TileType (*tiles)[N_ROWS] = map->tiles;
-    // const TILETYPE_PTR(tiles) = map->tiles;
-
-    // printf("\n\n");
-
-	// for (int row = 0; row < N_ROWS; row++) {
-	// 	for (int col = 0; col < N_COLS; col++){
-    //         if (col % SECTOR_W == 0) { printf("| "); continue; }
-    //         if (row % SECTOR_H == 0) { printf("=="); continue; }
-
-	// 		switch (tiles[col][row]) {
-	// 			case TILE_TERRAIN: {
-	// 				printf("~ ");
-	// 				break;
-	// 			}
-	// 			case TILE_FLOOR: {
-	// 				printf("X ");
-	// 				break;
-	// 			}
-    //             case TILE_ROOM_ENTRANCE: {
-    //                 printf("O ");
-    //                 break;
-    //             }
-	// 			default: {
-	// 				break;
-	// 			}
-	// 		}
-	// 	}
-	// 	printf("\n");
-	// }
-
-    // printf("\n\n");
+void print_map(int cols, int rows, int tiles[cols][rows]) {
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
+            printf("%d ", tiles[col][row]);
+        }
+        printf("\n");
+    }
 }
 
-// todo: think of a better name
-// first dungeon: Small Groves
-// idea: difficulty increase -> Deep Small Groves
-//       with more complex layouts
-void generate_small_groves_map() {
-    // const int n_sectors_x = GetRandomValue(2, 3);
-    // const int n_sectors_y = GetRandomValue(2, 3);
-    const int n_sectors_x = 2;
-    const int n_sectors_y = 2;
+void connect_rooms(Room *room1, Room *room2, enum TileType tiles[MAX_COLS][MAX_ROWS], int bend_chance) {
+    // Calculate the centers of the two rooms
+    int center1_x = room1->x + room1->cols / 2;
+    int center1_y = room1->y + room1->rows / 2;
 
+    int center2_x = room2->x + room2->cols / 2;
+    int center2_y = room2->y + room2->rows / 2;
 
-    const int n_sectors = n_sectors_x * n_sectors_y;
+    // Create a corridor with bends
+    int col = center1_x;
+    int row = center1_y;
+
+    while (col != center2_x || row != center2_y) {
+        if (tiles[col][row] == TILE_TERRAIN)
+            tiles[col][row] = TILE_CORRIDOR;
+
+        // Introduce random bends
+        if (GetRandomValue(0, bend_chance) == 0) {
+            // Move vertically
+            if (row < center2_y) {
+                row++;
+            } else if (row > center2_y) {
+                row--;
+            }
+        } else {
+            // Move horizontally
+            if (col < center2_x) {
+                col++;
+            } else if (col > center2_x) {
+                col--;
+            }
+        }
+    }
+    room1->n_corridors++;
+    room2->n_corridors++;
+}
+
+// /*void*/enum TileType** generate_map(MapGenerationConfig config) {
+MapData generate_map(MapGenerationConfig config) {
+
+    MapData ret = { 0 };
+
+    const int n_sectors_x = config.n_sectors_x;
+    const int n_sectors_y = config.n_sectors_y;
+
+    // n_sectors_x * n_sectors_y
+    const int n_sectors = n_sectors_x * n_sectors_y; 
 
     printf("N Sectors: %i, %i: (%i)\n", n_sectors_x, n_sectors_y, n_sectors);
 
-    const int sector_rows = 16;
-    const int sector_cols = 16;
+    const int sector_rows = config.sector_rows;
+    const int sector_cols = config.sector_cols;
 
-    enum TileType tiles[n_sectors_x * sector_cols][n_sectors_y * sector_rows];
-    // init
-    for (int col = 0; col < n_sectors_x * sector_cols; col++){
-            for (int row = 0; row < n_sectors_y * sector_rows; row++) {
-                tiles[col][row] = TILE_TERRAIN;
-            }
+    ret.cols = sector_cols * n_sectors_x;
+    if (ret.cols > MAX_COLS) {
+        printf("Error: Map cols (%i) exceeds MAX_COLS (%i)\n", ret.cols, MAX_COLS);
+    }
+    ret.rows = sector_rows * n_sectors_y;
+    if (ret.rows > MAX_ROWS) {
+        printf("Error: Map rows (%i) exceeds MAX_ROWS (%i)\n", ret.cols, MAX_ROWS);
     }
 
-    Room rooms[n_sectors]; // todo: initialize
+    // enum TileType tiles[n_sectors_x * sector_cols][n_sectors_y * sector_rows];
+    // enum TileType (*tiles)[MAX_ROWS] = ret.tiles;
+    // init
+    for (int col = 0; col < MAX_COLS; col++) {
+        for (int row = 0; row < MAX_ROWS; row++) {
+            ret.tiles[col][row] = TILE_TERRAIN;
+        }
+    }
+    // printf("LOL\n");
+
+    Room rooms[n_sectors]; 
+    for (int i = 0; i < n_sectors; i++) {
+        rooms[i] = (Room){
+            .x = 0,
+            .y = 0,
+            .cols = 0,
+            .rows = 0,
+            .n_corridors = 0
+        };
+    }
     
     // generate rooms
     for (int sector_x = 0; sector_x < n_sectors_x; sector_x++) {
         for (int sector_y = 0; sector_y < n_sectors_y; sector_y++) {
 
             int sector_index = sector_x * n_sectors_y + sector_y;
-            bool dummy = GetRandomValue(0,100) == 0;
-            if (!dummy) {
+            printf("Room index: %i\n", sector_index);
+            bool dummy = GetRandomValue(0, config.dummy_chance) == 0;
+            if ((config.dummy_chance == 0) ||
+                (config.dummy_chance != 0 && !dummy)) {
                 //
                 // create room in this sector
                 //
-                int room_width = GetRandomValue(4, 8);
-                int room_height = GetRandomValue(4, 8);
-                int room_x = GetRandomValue(sector_x * sector_cols, sector_x * sector_cols + sector_cols - room_width);
-                int room_y = GetRandomValue(sector_y * sector_rows, sector_y * sector_rows + sector_rows - room_height);
-                printf("Spawn room in sector: %i, %i, Room: %i, %i, %i %i\n", sector_x, sector_y, room_x, room_y, room_width, room_height);
+                int room_width = GetRandomValue(config.room_width_min, config.room_width_max);
+                int room_height = GetRandomValue(config.room_height_min, config.room_height_max);
+
+                int room_x = GetRandomValue(sector_x * sector_cols, (sector_x + 1) * sector_cols - room_width);
+                int room_y = GetRandomValue(sector_y * sector_rows, (sector_y + 1) * sector_rows - room_height);
+
+                // int room_x = GetRandomValue(sector_x * sector_cols, sector_x * sector_cols + sector_cols - room_width);
+                // int room_y = GetRandomValue(sector_y * sector_rows, sector_y * sector_rows + sector_rows - room_height);
+                printf("Spawn room %i in sector: %i, %i, Room: %i, %i, %i %i\n", sector_index, sector_x, sector_y, room_x, room_y, room_width, room_height);
                 rooms[sector_index] = (Room){
-                    room_x,
-                    room_y,
-                    room_width,
-                    room_height,
-                    false
+                    .x = room_x,
+                    .y = room_y,
+                    .cols = room_width,
+                    .rows = room_height,
+                    .n_corridors = 0,
                 };
-                //
             }
-            else {
-                // create dummy room in this sector
-                // int dummy_x = GetRandomValue(sector_x * sector_cols, sector_cols);
-                // int dummy_y = GetRandomValue(sector_y * sector_rows, sector_rows);
-                int dummy_x = GetRandomValue(sector_x * sector_cols, sector_x * sector_cols + sector_cols);
-                int dummy_y = GetRandomValue(sector_y * sector_rows, sector_y * sector_rows + sector_rows);
-                rooms[sector_index] = (Room){
-                    dummy_x, 
-                    dummy_y,
-                    1, 
-                    1,
-                    false
-                };
+            else if ((config.dummy_chance != 0 && dummy)) {
+                if (1 == 1) {
+                    // create dummy room in this sector
+                    // int dummy_x = GetRandomValue(sector_x * sector_cols, sector_cols);
+                    // int dummy_y = GetRandomValue(sector_y * sector_rows, sector_rows);
+                    int dummy_x = GetRandomValue(sector_x * sector_cols, sector_x * sector_cols + sector_cols);
+                    int dummy_y = GetRandomValue(sector_y * sector_rows, sector_y * sector_rows + sector_rows);
+                    printf("Spawn dummy room at %i, %i\n", dummy_x, dummy_y);
+                    rooms[sector_index] = (Room){
+                        .x = dummy_x, 
+                        .y = dummy_y,
+                        .cols = 1, 
+                        .rows = 1,
+                        .n_corridors = 0,
+                    };
+                }
             }
         }
     }
@@ -120,88 +151,59 @@ void generate_small_groves_map() {
         printf("Room %i: [%i, %i, %i, %i]\n", i, rm->x, rm->y, rm->cols, rm->rows);
         for (int col = rm->x; col < (rm->x + rm->cols); col++) {
             for (int row = rm->y; row < (rm->y + rm->rows); row++) {
-                printf("floor %i,%i\n", col, row);
-                tiles[col][row] = TILE_FLOOR;
+                // printf("floor %i,%i\n", col, row);
+                ret.tiles[col][row] = TILE_FLOOR;
             }
         }
     }
 
-    for (int i = 0; i < n_sectors_x * n_sectors_y; i++) {
-        Room* cur_room = &rooms[i];
-        
-        // left, right, top, bottom 
-        int adj[4] = { -1, -1, -1, -1 };
-
-        // Check if there is a sector to the left
-        if (i % n_sectors_x != 0) {
-            adj[0] = 1;  // Left side
-            printf("Sector %i has left-side\n", i);
-            int leftRoomIndex = (i % n_sectors_x != 0) ? i - 1 : -1;  // Left side
-            // create corridor
-            Room* left_room = &rooms[leftRoomIndex];
+    for (int i = 0; i < n_sectors; i++) {
+        for (int j = i + 1; j < n_sectors; j++) {
+            Room *room1 = &rooms[i];
+            Room *room2 = &rooms[j];
             
-            int left_delta = left_room->x - cur_room->x;
-            int meeting_point_col = GetRandomValue(left_room->x + left_room->cols + 1, cur_room->x - 1);
-            int highest = cur_room->y < left_room->y ? cur_room->y : left_room->y;
-            int lowest = (cur_room->y + cur_room->rows) > (left_room->y + left_room->rows) ? 
-                cur_room->y + cur_room->rows : left_room->y + left_room->rows;
-            int meeting_point_row = GetRandomValue(lowest, highest);
-            tiles[meeting_point_col][meeting_point_row] = TILE_CORRIDOR_MEETING_POINT;
-            cur_room->has_corridor = true;
-
-            int left_room_entrance_y = GetRandomValue(left_room->y, left_room->y + left_room->rows);
-            int cur_room_entrance_y = GetRandomValue(cur_room->y, cur_room->y + cur_room->rows);
-            //
-            // create corridor
-            //
-            // start from left room
-
-            // create corridor from left room -> meeting point
-            for (int corridor_col = left_room->x + left_room->cols; corridor_col < meeting_point_col; corridor_col++) {
-                tiles[corridor_col][left_room_entrance_y] = TILE_CORRIDOR;
+            printf("Room %i -> %i\n", i, j);
+            // connect_rooms(room1, room2, n_sectors_x * sector_cols, n_sectors_y * sector_rows, ret.tiles, config.corridor_bend_chance);
+            
+            if (!room1->n_corridors || !room2->n_corridors) {
+                // if (room1->n_corridors > 0 && room2->n_corridors > 0) {
+                // printf("* Connecting room %i -> %i\n", i, j);
+                connect_rooms(room1, room2, ret.tiles, config.corridor_bend_chance);
             }
-            // create corridor from cur room (right) -> meeting point
-            for (int corridor_col = cur_room->x; corridor_col > meeting_point_col; corridor_col--) {
-                tiles[corridor_col][left_room_entrance_y] = TILE_CORRIDOR;
+            else {
+                //
+                // at least 1 corridor on each room
+                //
+
+                //
+                // if it is a dead-end, force another corridor
+                // (avoid extra long dead-ends)
+                //
+                if ((room1->cols == 1 && room1->rows == 1)
+                ||  (room2->cols == 1 && room2->rows == 1)) {
+                    connect_rooms(room1, room2, ret.tiles, config.corridor_bend_chance);
+                }
+
+                // printf("*** Connecting room %i -> %i\n", i, j);
+                if ((config.extra_corridor_chance != 0 && 
+                    GetRandomValue(0, config.extra_corridor_chance) == 0)
+                    // ||
+                    // config.extra_corridor_chance == 0) {
+                ) {
+                        connect_rooms(room1, room2, ret.tiles, config.corridor_bend_chance);
+                }
             }
-            int y_delta = left_room_entrance_y - meeting_point_row;
-            int step = (y_delta < 0) ? -1 : 1;
-            // go up/down to meeting_point_row
-            for (int row = meeting_point_row; row != left_room_entrance_y; row += step) {
-                tiles[meeting_point_col-1][row] = TILE_CORRIDOR;
-                tiles[meeting_point_col+1][row] = TILE_CORRIDOR;
-            }
-        }
-
-        // Check if there is a sector to the right
-        if ((i + 1) % n_sectors_x != 0) {
-            adj[1] = 1;  // Right side
-            printf("Sector %i has right-side\n", i);
-            int rightRoomIndex = ((i + 1) % n_sectors_x != 0) ? i + 1 : -1;  // Right side
-        }
-
-        // Check if there is a sector above
-        if (i >= n_sectors_x) {
-            adj[2] = 1;  // Top side
-            printf("Sector %i has top-side\n", i);
-            int topRoomIndex = (i >= n_sectors_x) ? i - n_sectors_x : -1;  // Top side
-        }
-
-        // Check if there is a sector below
-        if (i < n_sectors - n_sectors_x) {
-            adj[3] = 1;  // Bottom side
-            printf("Sector %i has bottom-side\n", i);
-            int bottomRoomIndex = (i < n_sectors - n_sectors_x) ? i + n_sectors_x : -1;  // Bottom side
         }
     }
-    
-        for (int row = 0; row < n_sectors_y * sector_rows; row++) {
-    for (int col = 0; col < n_sectors_x * sector_cols; col++){
+
+    // printf("Map size: %ix%i\n", ret.cols, ret.rows);
+    for (int row = 0; row < ret.rows; row++) {
+        for (int col = 0; col < ret.cols; col++){
         // printf("Col: %i\n", col);
             // if (row % sector_rows == 0) { printf("| "); continue; }
             // if (col % sector_cols == 0) { printf("=="); continue; }
 
-			switch (tiles[col][row]) {
+			switch (ret.tiles[col][row]) {
 				case TILE_TERRAIN: {
 					printf("~ ");
 					break;
@@ -214,11 +216,12 @@ void generate_small_groves_map() {
                     printf("O ");
                     break;
                 }
-                case TILE_CORRIDOR_MEETING_POINT: {
-                    printf("M ");
-                    break;
-                }
+                // case TILE_CORRIDOR_MEETING_POINT: {
+                //     printf("M ");
+                //     break;
+                // }
 				default: {
+                    printf("Error: Unknown tile type found on map. (%i, %i) = %i\n", col, row, ret.tiles[col][row]);
                     printf("? ");
 					break;
 				}
@@ -226,85 +229,12 @@ void generate_small_groves_map() {
 		}
 		printf("\n");
 	}     
+    for (int i = 0; i < n_sectors; i++) {
+        printf("Room %i: %i cors\n", i, rooms[i].n_corridors);
+    }
+
+    // ret.tiles = tiles;
+    return ret;
+    // return tiles;
+    
 }
-
-// // subroom
-// void generate_room(int sX, int sY, int sW, int sH, MapData *map) {
-
-//     int minRoomWidth = (int)((float)sW * 0.2f);
-//     // int minRoomHeight = (int)((float)sH * 0.2f);
-//     int minRoomHeight = (int)((float)minRoomWidth * 0.3f);
-
-//     printf("Min: [%i, %i]\n", minRoomWidth, minRoomHeight);
-
-//     int maxRoomWidth = (int)((float)sW * 0.8f);
-//     // int maxRoomHeight = (int)((float)sH * 0.8f);
-//     // int maxRoomHeight = (int)((float)maxRoomWidthf);
-//     int maxRoomHeight = maxRoomWidth;
-
-//     int roomWidth = GetRandomValue(minRoomWidth, maxRoomWidth);
-//     int roomHeight = GetRandomValue(minRoomHeight, maxRoomHeight);
-//     printf("Dims: [%i, %i]\n", roomWidth, roomHeight);
-
-//     // offsets
-//     const int gap = 1;
-//     int oX = GetRandomValue(gap, sW - roomWidth - gap);
-//     int oY = GetRandomValue(gap, sH - roomHeight - gap);
-//     printf("Room: (%i,%i) -> (%i, %i)\n", sX + oX, sY + oY, sX + oX + roomWidth, sY + oY + roomHeight);
-
-//     TILETYPE_PTR(tiles) = map->tiles;
-//     for (int col = sX + oX; col < sX + oX + roomWidth; col++) {
-//         for (int row = sY + oY; row < sY + oY + roomHeight; row++) {
-//             tiles[col][row] = TILE_FLOOR;
-//         }
-//     }
-
-    // find out what sector this is
-    // int sXn = (int)((float)sX / (float)sW); // sector x value
-    // int sYn = (int)((float)sY / (float)sY); // sector y value
-
-    // generate entrances
-
-    // create entrance
-    // if the room is the top left
-    // todo: 
-    // if (sXi == 0 && sYi == 0) {
-    //     // how many entrances?
-    //     int n_entrances = GetRandomValue(1, 2);
-    //     if (n_entrances == 1) {
-    //         int right_or_bottom = GetRandomValue(0, 1);
-    //         if (right_or_bottom == 0) {
-    //             // right
-    //             int y_entrance_pos = GetRandomValue(sY + oY, sY + oY + roomHeight);
-    //             tiles[sX + oX + roomWidth-1][y_entrance_pos] = TILE_ROOM_ENTRANCE;
-    //         } 
-    //         else if (right_or_bottom == 1) {
-    //             // bottom
-    //             int x_entrance_pos = GetRandomValue(sX + oX, sX + oX + roomWidth);
-    //             tiles[x_entrance_pos][sY + oY + roomHeight-1] = TILE_ROOM_ENTRANCE;
-    //         }
-    //     } 
-    //     else if (n_entrances == 2) {
-            
-    //     }
-    // }
-// }
-
-// MapData generate_dungeon() {
-
-//     MapData map = { 0 };
-
-//     for (int sX = 0; sX < SECTORS_X; sX++) {
-
-//         for (int sY = 0; sY < SECTORS_Y; sY++) {
-
-//             generate_room(sX * SECTOR_W, sY * SECTOR_H, SECTOR_W, SECTOR_H, &map);
-
-//         }
-
-//     }
-
-
-//     print_dungeon(&map);
-//     return map;
-// }

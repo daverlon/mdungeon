@@ -3,27 +3,9 @@
 enum TileType {
     TILE_TERRAIN,
     TILE_FLOOR,
-    TILE_CORRIDOR,
-    TILE_CORRIDOR_MEETING_POINT
+    TILE_CORRIDOR
+    // TILE_CORRIDOR_MEETING_POINT
 };
-
-
-// #define N_ROWS 48
-// #define N_COLS 48
-
-// #define SECTORS_X 2
-// #define SECTORS_Y 2
-
-// #define SECTOR_W (N_COLS/SECTORS_X)
-// #define SECTOR_H (N_ROWS/SECTORS_Y)
-
-typedef struct {
-    int map_cols;
-    int map_rows;
-    int n_sectors_x;
-    int n_sectors_y;
-    enum TileType *tiles;
-} MapData;
 
 typedef struct {
     // bool is_dummy;
@@ -31,9 +13,66 @@ typedef struct {
     int y;
     int cols;
     int rows;
-    bool has_corridor;
+    // bool has_corridor;
+    int n_corridors;
 } Room;
 
-extern void generate_small_groves_map();
-// extern MapData generate_dungeon();
-// extern MapData generate_dungeon();
+/*
+    int n_sectors_x;
+    int n_sectors_y;
+
+    int sector_rows;
+    int sector_cols;
+
+    int room_width_min;
+    int room_height_min;
+    int room_width_max;
+    int room_height_max;
+
+    //
+    // probabilities
+    // all GetRandomValue(0,n)==0
+    //
+    int dummy_chance; 
+    int extra_corridor_chance; 
+    int corridor_bend_chance;
+*/
+typedef struct {
+    int n_sectors_x;
+    int n_sectors_y;
+
+    int sector_cols;
+    int sector_rows;
+
+    int room_width_min;
+    int room_width_max;
+
+    int room_height_min;
+    int room_height_max;
+
+    //
+    // probabilities
+    // all GetRandomValue(0,n)==0
+    //
+    int dummy_chance; 
+    int extra_corridor_chance; 
+    int corridor_bend_chance;
+
+} MapGenerationConfig;
+
+#define MAX_ROWS 64
+#define MAX_COLS 64
+
+typedef struct {
+    int cols;
+    int rows;
+    // enum TileType** tileenum TileType (*tiles)[rows];s;
+    // enum TileType (*tiles)[MAX_ROWS];
+    enum TileType tiles[MAX_COLS][MAX_ROWS];
+    // enum TileType (*tiles)[MAX_ROWS];
+} MapData;
+
+extern MapData generate_map(MapGenerationConfig config);
+
+
+// #define TILETYPE_PTR(name) enum TileType (**name)
