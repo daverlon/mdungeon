@@ -13,6 +13,7 @@
 #include "raymath.h"
 
 #include "dungeon.h"
+#include "dungeon_presets.h"
 // extern MapData generate_dungeon();
 
 #define BLACK_SEMI_TRANSPARENT (Color){0, 0, 0, 128}
@@ -122,7 +123,7 @@ Vector2 direction_to_vector2(enum Direction direction) {
 	}
 }
 
-void control_entity(Entity* en) {
+void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
 
 	if (en->isMoving) return;
 	en->animationState = IDLE;
@@ -166,13 +167,43 @@ void control_entity(Entity* en) {
 
 	// this may be a bit scuffed. unecessary extra checks here?
 	Vector2 movement = direction_to_vector2(en->direction);
+	
 	if (!Vector2Equals((movement), (Vector2) { 0 }) && shouldMove) {
 		// printf("MOVE!\n");
 		// printf("X: %2.0f -> %2.0f\n", en->position.x, en->position.x+1.0f);
 		// printf("Y: %2.0f -> %2.0f\n", en->position.y, en->position.y+1.0f);
 		en->targetPosition = Vector2Add(en->position, movement);
-		en->isMoving = true;
-		en->animationState = MOVE;
+		// printf("Target: %2.5f, %2.5f\n", en->targetPosition.x, en->targetPosition.y);
+		int i_targ_x = (int)en->targetPosition.x;
+		int i_targ_y = (int)en->targetPosition.y;
+		// printf("Target: %i, %i\n", i_targ_x, i_targ_y);
+
+		//
+		// todo: fix diagonal tiles
+		// idea: walking on flame tiles or other
+		//		 hazard tiles apply debufs/affects to player
+		//		 tradeoff for walking on unsafe tile
+		//
+		switch (tiles[i_targ_x][i_targ_y]) {
+			case TILE_TERRAIN: {
+				// printf("Invalid movement.!\n");
+				en->isMoving = false;
+				en->animationState = IDLE;
+				return;
+				break;
+			}
+			case TILE_CORRIDOR:
+			case TILE_FLOOR: {
+				en->isMoving = true;
+				en->animationState = MOVE;
+				break;
+			}
+			default: {
+				printf("Error (MOVEMENT) invalid tile detected?: %i\n", tiles[i_targ_x][i_targ_y]);
+				break;
+			}
+		}
+
 	}
 }
 
@@ -185,10 +216,15 @@ void move_entity(Entity* en) {
 	// printf("%2.5f, %2.5f\n", en->position.x, en->position.y);
 
 	const Vector2 movement = direction_to_vector2(en->direction);
+	// printf("Cur: %2.5f, %2.5f\n", en->position.x, en->position.y);
+	// printf("Tar: %2.5f, %2.5f\n", en->position.x + movement.x, en->position.y + movement.y);
 
 	// linear interpolation
 	// en->position.x = Lerp(en->position.x, en->targetPosition.x, t);
 	// en->position.y = Lerp(en->position.y, en->targetPosition.y, t);
+
+	// const Vector2 
+	// if ()
 
 	en->position.x += movement.x * GetFrameTime() * GRID_MOVESPEED;
 	en->position.y += movement.y * GetFrameTime() * GRID_MOVESPEED;
@@ -460,26 +496,10 @@ int main(void/*int argc, char* argv[]*/) {
 
 	// MapData map = { 0 };
 	// map = generate_dungeon();
-	MapGenerationConfig cfg = (MapGenerationConfig){
-		.n_sectors_x = 2,
-		.n_sectors_y = 2,
 
-		.sector_cols = 16,
-		.sector_rows = 16,
-
-		.room_width_min = 4, 
-		.room_width_max = 10, 
-
-		.room_height_min = 4,
-		.room_height_max = 10,
-
-		.dummy_chance = 0,
-		.extra_corridor_chance = 1,
-		.corridor_bend_chance = 0
-	};
 	// enum TileType** mapTiles = generate_map(cfg);
 	MapData mapData;
-	mapData = generate_map(cfg);
+	mapData = generate_map(dungeon_preset_basic);
 
 	while (!WindowShouldClose()) {
 
@@ -496,7 +516,7 @@ int main(void/*int argc, char* argv[]*/) {
 		if (IsKeyPressed(KEY_R)) {
 			// map = generate_dungeon();
 			// generate_small_groves_map();
-			mapData = generate_map(cfg);
+			mapData = generate_map(dungeon_preset_basic);
 		}
 		int scroll = GetMouseWheelMove();
 		if (scroll != 0.0f) {
@@ -506,7 +526,7 @@ int main(void/*int argc, char* argv[]*/) {
 		}
 
 		// update game logic
-		control_entity(playerEntity);
+		control_entity(playerEntity, mapData.tiles);
 		move_entity(playerEntity); // perhaps move_entities (once there is ai)
 		// move_entity_freely(playerEntity);
 
@@ -546,7 +566,33 @@ int main(void/*int argc, char* argv[]*/) {
 				// }
 				// render_dungeon(&map);
 
-				// DrawRectangleLines(0, SPRITE_SIZE / 4, 8 * TILE_SIZE, 8 * TILE_SIZE, BLACK);
+				//
+				// render map
+				//
+				for (int row = 0; row < mapData.rows; row++) {
+					for (int col = 0; col < mapData.cols; col++){
+						switch (mapData.tiles[col][row]) {
+							case TILE_TERRAIN: {
+								break;
+							}
+							case TILE_CORRIDOR:
+							case TILE_FLOOR: {
+								DrawRectangle(
+									col * TILE_SIZE,
+									SPRITE_SIZE / 4 + row * TILE_SIZE, 
+									TILE_SIZE, 
+									TILE_SIZE,
+									LIGHTGREEN);
+								break;
+							}
+							default: {
+								printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, mapData.tiles[col][row]);
+								// printf("? ");
+								break;
+							}
+						}
+					}
+				}
 
 				for (int i = 0; i < mapItemCounter; i++) {
 					switch (mapItems[i].type) {

@@ -1,13 +1,16 @@
 #pragma once
 
 enum TileType {
-    TILE_TERRAIN,
+    TILE_TERRAIN, // default terrain
     TILE_FLOOR,
     TILE_CORRIDOR
     // TILE_CORRIDOR_MEETING_POINT
 };
 
 typedef struct {
+    // can check if dummy by checking if
+    //              cols == 1 && rows == 1
+    //              this should be fine
     // bool is_dummy;
     int x;
     int y;
@@ -54,6 +57,9 @@ typedef struct {
     // probabilities
     // all GetRandomValue(0,n)==0
     //
+    // todo: think of a better way to do this?
+    // however it works well as is
+    // 
     int dummy_chance; 
     int extra_corridor_chance; 
     int corridor_bend_chance;
