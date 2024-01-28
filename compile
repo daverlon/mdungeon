@@ -6,6 +6,7 @@ gcc -Wall                   \
     -W                      \
     -Wpedantic              \
     src/main.c              \
+    src/dungeon.c           \
     -o bin/game             \
     -Idependencies/include  \
     -Ldependencies/lib      \
