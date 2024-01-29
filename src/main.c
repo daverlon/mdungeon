@@ -14,6 +14,8 @@
 
 #include "dungeon.h"
 #include "dungeon_presets.h"
+
+#include "pathfinding.h"
 // extern MapData generate_dungeon();
 
 #define BLACK_SEMI_TRANSPARENT (Color){0, 0, 0, 128}
@@ -501,7 +503,7 @@ int main(void/*int argc, char* argv[]*/) {
 
 	Entity fantano = { 0 };
 	fantano.texture = LOAD_FANTANO_TEXTURE();
-	fantano.position = (Vector2){ 0.0f, 0.0f };
+	fantano.position = (Vector2){ 5.0f, 5.0f };
 	fantano.animation.nFrames = 20;
 
 	Entity cyhar = { 0 };
@@ -600,6 +602,16 @@ int main(void/*int argc, char* argv[]*/) {
 
 		render_player_inventory(playerEntity);
 
+		// pathfinding
+  		Node startPos = (Node){(int)playerEntity->position.x, (int)playerEntity->position.y};
+		Node endPos = (Node){(int)fantano.position.x, (int)fantano.position.y};
+		NodeList path = findPath(mapData.cols, mapData.rows, startPos, endPos, mapData.tiles);
+		printf("Path size: %i\n", path.size);
+		for (size_t i = 0; i < path.size; i++) {
+			printf("%i --- ", i);
+			print_node(path.data[i]);
+		}
+
 		// do rendering
 		BeginDrawing();
 		{
@@ -630,12 +642,16 @@ int main(void/*int argc, char* argv[]*/) {
 							}
 							case TILE_CORRIDOR:
 							case TILE_FLOOR: {
+								Color clr = LIGHTGREEN;
+								if (inList(&path, (Node){col, row})) {
+										clr = RED;
+								}
 								DrawRectangle(
 									col * TILE_SIZE,
 									row * TILE_SIZE, 
 									TILE_SIZE, 
 									TILE_SIZE,
-									LIGHTGREEN);
+									clr);
 								break;
 							}
 							case TILE_INVALID: {
