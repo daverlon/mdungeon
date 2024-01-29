@@ -26,7 +26,7 @@ void connect_rooms(Room *room1, Room *room2, enum TileType tiles[MAX_COLS][MAX_R
     int row = center1_y;
 
     while (col != center2_x || row != center2_y) {
-        if (tiles[col][row] == TILE_TERRAIN)
+        if (tiles[col][row] == TILE_WALL /*|| tiles[col][row] == INVALID*/)
             tiles[col][row] = TILE_CORRIDOR;
 
         // Introduce random bends
@@ -100,7 +100,7 @@ MapData generate_map(MapGenerationConfig config) {
     // init
     for (int col = 0; col < MAX_COLS; col++) {
         for (int row = 0; row < MAX_ROWS; row++) {
-            ret.tiles[col][row] = TILE_TERRAIN;
+            ret.tiles[col][row] = TILE_WALL;
         }
     }
     // printf("LOL\n");
@@ -183,7 +183,6 @@ MapData generate_map(MapGenerationConfig config) {
             Room *room2 = &rooms[j];
             
             printf("Room %i -> %i\n", i, j);
-            // connect_rooms(room1, room2, n_sectors_x * sector_cols, n_sectors_y * sector_rows, ret.tiles, config.corridor_bend_chance);
             
             if (!room1->n_corridors || !room2->n_corridors) {
                 // if (room1->n_corridors > 0 && room2->n_corridors > 0) {
@@ -216,6 +215,26 @@ MapData generate_map(MapGenerationConfig config) {
         }
     }
 
+    //
+    // force dead-end to loop
+    for (int i = 0; i < n_sectors; i++) {
+        for (int j = i + 1; j < n_sectors; j++) {
+            Room *room1 = &rooms[i];
+            Room *room2 = &rooms[j];
+            
+            if (
+                ((room1->cols == 1 && room1->rows == 1) && room1->n_corridors < 2)
+                ||
+                ((room2->cols == 1 && room2->rows == 1) && room2->n_corridors < 2)
+            ) {
+                printf("[Dead-end detection] Forcing connection between room %i (%i,%i) and room %i (%i, %i)\n",
+                    i, room1->x, room1->y, j, room2->x, room2->y);
+                connect_rooms(room1, room2, ret.tiles, config.corridor_bend_chance);
+            }
+        }
+    }
+
+
     // printf("Map size: %ix%i\n", ret.cols, ret.rows);
     for (int row = 0; row < ret.rows; row++) {
         for (int col = 0; col < ret.cols; col++){
@@ -224,7 +243,7 @@ MapData generate_map(MapGenerationConfig config) {
             // if (col % sector_cols == 0) { printf("=="); continue; }
 
 			switch (ret.tiles[col][row]) {
-				case TILE_TERRAIN: {
+				case TILE_WALL: {
 					printf("~ ");
 					break;
 				}

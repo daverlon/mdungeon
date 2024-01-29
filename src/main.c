@@ -27,9 +27,11 @@ const int worldHeight = 32 * 8;
 
 #define SPRITE_SIZE 256.0f
 
-#define TILE_SIZE 128
+// #define TILE_SIZE 128
+#define TILE_SIZE 160
+// #define TILE_SIZE 256
 
-#define GRID_MOVESPEED 3.0f
+#define GRID_MOVESPEED 4.0f
 #define POSITION_THRESHOLD 0.05f
 
 #define LOAD_ZOR_TEXTURE() (LoadTexture("res/zor/zor_spritesheet.png"))
@@ -184,8 +186,18 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
 		//		 hazard tiles apply debufs/affects to player
 		//		 tradeoff for walking on unsafe tile
 		//
+		// diagonal block
+		if (movement.x != 0.0f && movement.y != 0.0f) {
+			if (tiles[i_targ_x][(int)en->position.y] == TILE_WALL
+			|| 	tiles[(int)en->position.x][i_targ_y] == TILE_WALL) {
+				printf("Block diagonal movement\n");
+				en->isMoving = false;
+				en->animationState = IDLE;
+				return;
+			}
+		}
 		switch (tiles[i_targ_x][i_targ_y]) {
-			case TILE_TERRAIN: {
+			case TILE_WALL: {
 				// printf("Invalid movement.!\n");
 				en->isMoving = false;
 				en->animationState = IDLE;
@@ -266,20 +278,41 @@ void update_animation_frame(Animation* anim) {
 }
 
 Vector2 position_to_grid_position(Vector2 pos) {
-	return Vector2Subtract(Vector2Multiply(pos, (Vector2) { TILE_SIZE, TILE_SIZE }), (Vector2) { SPRITE_SIZE / 4, SPRITE_SIZE / 4 });
+    Vector2 gridPos = Vector2Multiply(pos, (Vector2) { TILE_SIZE, TILE_SIZE });
+    
+    // Center the entity within the grid cell
+    gridPos.x += (TILE_SIZE - SPRITE_SIZE) / 2;
+    gridPos.y += (TILE_SIZE - SPRITE_SIZE) / 2;
+	gridPos.y -= SPRITE_SIZE / 4;
+
+    return gridPos;
 }
 
 void render_entity(Entity* en) {
 	Vector2 gridPosition = position_to_grid_position(en->position);
+	// printf("[%i,%i] -> [%i,%i]\n", (int)en->position.x, (int)en->position.y, (int)gridPosition.x, (int)gridPosition.y);
 	// printf("%i\n", en->animation.yOffset);
-	DrawCircle(gridPosition.x + SPRITE_SIZE / 2, gridPosition.y + SPRITE_SIZE / 2 + TILE_SIZE / 2, 35.0f, BLACK_SEMI_TRANSPARENT);
+
+	// offset y
+	DrawCircle(
+		gridPosition.x + (SPRITE_SIZE / 2),
+		gridPosition.y + (SPRITE_SIZE / 2) + (SPRITE_SIZE / 4),
+		35.0f, 
+		BLACK_SEMI_TRANSPARENT
+	);
+	// DrawRectangleLines(
+	// 	gridPosition.x, gridPosition.y, SPRITE_SIZE, SPRITE_SIZE, BLACK);
 	DrawTextureRec(
 		en->texture,
 		(Rectangle) {
-		en->animation.curFrame* SPRITE_SIZE, en->animation.yOffset + en->direction * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE
-	},
+			en->animation.curFrame * SPRITE_SIZE, 
+			en->animation.yOffset + (en->direction * SPRITE_SIZE), 
+			SPRITE_SIZE, 
+			SPRITE_SIZE
+		},
 		gridPosition,
-			WHITE);
+		WHITE
+	);
 }
 
 Entity create_zor_entity_instance(Vector2 pos) {
@@ -498,8 +531,10 @@ int main(void/*int argc, char* argv[]*/) {
 	// map = generate_dungeon();
 
 	// enum TileType** mapTiles = generate_map(cfg);
-	MapData mapData;
-	mapData = generate_map(dungeon_preset_basic);
+	MapData mapData = generate_map(DUNGEON_PRESET_BASIC);
+	// {
+	// 	mapData = generate_map(dungeon_preset_basic);
+	// }
 
 	while (!WindowShouldClose()) {
 
@@ -516,6 +551,23 @@ int main(void/*int argc, char* argv[]*/) {
 		if (IsKeyPressed(KEY_R)) {
 			// map = generate_dungeon();
 			// generate_small_groves_map();
+			MapGenerationConfig dungeon_preset_basic = (MapGenerationConfig){
+			    .n_sectors_x = GetRandomValue(2, 3),
+			    .n_sectors_y = 2,
+
+			    .sector_cols = 12,
+			    .sector_rows = 12,
+
+			    .room_width_min = 6, 
+			    .room_width_max = 10, 
+
+			    .room_height_min = 6,
+			    .room_height_max = 10,
+
+			    .dummy_chance = 0,
+			    .extra_corridor_chance = 3,
+			    .corridor_bend_chance = 2
+			};
 			mapData = generate_map(dungeon_preset_basic);
 		}
 		int scroll = GetMouseWheelMove();
@@ -540,7 +592,8 @@ int main(void/*int argc, char* argv[]*/) {
 		update_zor_animation(&zor);
 
 		Vector2 camTarget = Vector2Multiply(playerEntity->position, (Vector2) { TILE_SIZE, TILE_SIZE });
-		camTarget = Vector2Add(camTarget, (Vector2) { SPRITE_SIZE / 4, SPRITE_SIZE / 4 });
+		camTarget.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
+		camTarget.y += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 4);
 		camera.target = camTarget;
 
 		scan_items_for_pickup(&mapItemCounter, mapItems, playerEntity);
@@ -572,17 +625,20 @@ int main(void/*int argc, char* argv[]*/) {
 				for (int row = 0; row < mapData.rows; row++) {
 					for (int col = 0; col < mapData.cols; col++){
 						switch (mapData.tiles[col][row]) {
-							case TILE_TERRAIN: {
+							case TILE_WALL: {
 								break;
 							}
 							case TILE_CORRIDOR:
 							case TILE_FLOOR: {
 								DrawRectangle(
 									col * TILE_SIZE,
-									SPRITE_SIZE / 4 + row * TILE_SIZE, 
+									row * TILE_SIZE, 
 									TILE_SIZE, 
 									TILE_SIZE,
 									LIGHTGREEN);
+								break;
+							}
+							case TILE_INVALID: {
 								break;
 							}
 							default: {

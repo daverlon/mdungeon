@@ -1,11 +1,17 @@
 #pragma once
 
 enum TileType {
-    TILE_TERRAIN, // default terrain
+    TILE_INVALID, // error
+    TILE_WALL, // default terrain
     TILE_FLOOR,
     TILE_CORRIDOR
     // TILE_CORRIDOR_MEETING_POINT
 };
+
+// typedef struct {
+//     enum TileType type;
+
+// } TileData;
 
 typedef struct {
     // can check if dummy by checking if
@@ -18,6 +24,7 @@ typedef struct {
     int rows;
     // bool has_corridor;
     int n_corridors;
+    // bool skip; // no room here
 } Room;
 
 /*
