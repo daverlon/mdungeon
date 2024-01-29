@@ -31,6 +31,8 @@ typedef struct {
     int length;
 } PathList;
 
-extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
+//extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
+extern void dijkstra(MapData* map, Point src, Point dest, PathList* pathList);
+
 extern bool isInPathList(PathList* pathList, Point p);
 

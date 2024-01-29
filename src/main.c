@@ -206,6 +206,7 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
 				return;
 				break;
 			}
+			case TILE_ROOM_ENTRANCE:
 			case TILE_CORRIDOR:
 			case TILE_FLOOR: {
 				en->isMoving = true;
@@ -612,10 +613,13 @@ int main(void/*int argc, char* argv[]*/) {
 		//	print_node(path.data[i]);
 		//}*/
 		PathList pathList = { .path = NULL, .length = 0 };
-		aStarSearch(&mapData, 
-			(Point){(int)playerEntity->position.x, (int)playerEntity->position.y }, 
-			(Point){(int)fantano.position.x, (int)fantano.position.y }, & pathList,
-			false);
+		aStarSearch(
+			&mapData,
+			(Point) {(int)playerEntity->position.x, (int)playerEntity->position.y},
+			(Point) {(int)fantano.position.x, (int)fantano.position.y}, 
+			& pathList,
+			false
+		);
 
 		// do rendering
 		BeginDrawing();
@@ -645,6 +649,14 @@ int main(void/*int argc, char* argv[]*/) {
 							case TILE_WALL: {
 								break;
 							}
+							case TILE_ROOM_ENTRANCE: {
+								DrawRectangle(
+									col* TILE_SIZE,
+									row* TILE_SIZE,
+									TILE_SIZE,
+									TILE_SIZE,
+									LIGHTBLUE);
+							}
 							case TILE_CORRIDOR:
 							case TILE_FLOOR: {
 								Color clr = LIGHTGREEN;
@@ -670,6 +682,40 @@ int main(void/*int argc, char* argv[]*/) {
 								break;
 							}
 						}
+					}
+				}
+				if (IsKeyPressed(KEY_V)) {
+					for (int row = 0; row < mapData.rows; row++) {
+						for (int col = 0; col < mapData.cols; col++) {
+							switch (mapData.tiles[col][row]) {
+							case TILE_WALL: {
+								printf("~ ");
+								break;
+							}
+							case TILE_CORRIDOR:
+							case TILE_FLOOR: {
+
+								//if (inList(&path, (Node){col, row})) {
+								if (isInPathList(&pathList, (Point) { col, row })) {
+									printf("P ");
+								} else
+								printf("X ");
+								break;
+							}
+							case TILE_INVALID: {
+								break;
+							}
+							case TILE_ROOM_ENTRANCE: {
+								break;
+							}
+							default: {
+								printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, mapData.tiles[col][row]);
+								// printf("? ");
+								break;
+							}
+							}
+						}
+						printf("\n");
 					}
 				}
 

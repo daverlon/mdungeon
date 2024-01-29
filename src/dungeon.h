@@ -4,7 +4,8 @@ enum TileType {
     TILE_INVALID, // error
     TILE_WALL, // default terrain
     TILE_FLOOR,
-    TILE_CORRIDOR
+    TILE_CORRIDOR,
+    TILE_ROOM_ENTRANCE
     // TILE_CORRIDOR_MEETING_POINT
 };
 
@@ -84,6 +85,7 @@ typedef struct {
     // enum TileType** tileenum TileType (*tiles)[rows];s;
     // enum TileType (*tiles)[MAX_ROWS];
     enum TileType tiles[MAX_COLS][MAX_ROWS];
+    Vector2 corridor_entrance_points[32];
     // enum TileType (*tiles)[MAX_ROWS];
 } MapData;
 

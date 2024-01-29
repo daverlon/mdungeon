@@ -160,7 +160,7 @@ void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool c
                 }
             }
         }
- 
+
         if (isDestination(current, dest)) {
             //printf("Destination reached!\n");
             tracePath(nodeDetails, dest, pathList);

@@ -26,8 +26,26 @@ void connect_rooms(Room *room1, Room *room2, enum TileType tiles[MAX_COLS][MAX_R
     int row = center1_y;
 
     while (col != center2_x || row != center2_y) {
-        if (tiles[col][row] == TILE_WALL /*|| tiles[col][row] == INVALID*/)
+        if (tiles[col][row] == TILE_WALL) {
+            // Mark the wall or corridor as corridor
             tiles[col][row] = TILE_CORRIDOR;
+        }
+        else if (tiles[col][row] == TILE_FLOOR) {
+            // Mark the tiles where a corridor meets a room as entrance points
+            if ((col > room1->x && col < room1->x + room1->cols - 1 && row == room1->y) ||
+                (col > room1->x && col < room1->x + room1->cols - 1 && row == room1->y + room1->rows - 1) ||
+                (row > room1->y && row < room1->y + room1->rows - 1 && col == room1->x) ||
+                (row > room1->y && row < room1->y + room1->rows - 1 && col == room1->x + room1->cols - 1) ||
+                (col > room2->x && col < room2->x + room2->cols - 1 && row == room2->y) ||
+                (col > room2->x && col < room2->x + room2->cols - 1 && row == room2->y + room2->rows - 1) ||
+                (row > room2->y && row < room2->y + room2->rows - 1 && col == room2->x) ||
+                (row > room2->y && row < room2->y + room2->rows - 1 && col == room2->x + room2->cols - 1)) {
+                tiles[col][row] = TILE_ROOM_ENTRANCE;
+            }
+            else {
+                tiles[col][row] = TILE_FLOOR;
+            }
+        }
 
         // Introduce random bends
         if (bend_chance != 0) {
@@ -173,6 +191,15 @@ MapData generate_map(MapGenerationConfig config) {
             for (int row = rm->y; row < (rm->y + rm->rows); row++) {
                 // printf("floor %i,%i\n", col, row);
                 ret.tiles[col][row] = TILE_FLOOR;
+
+                //if (col == rm->x || col == (rm->x + rm->cols - 1) || row == rm->y || row == (rm->y + rm->rows - 1)) {
+                //    // Mark room entrances as TILE_ROOM_ENTRANCE
+                //    ret.tiles[col][row] = TILE_ROOM_ENTRANCE;
+                //}
+                //else {
+                //    ret.tiles[col][row] = TILE_FLOOR;
+                //}
+
             }
         }
     }
@@ -253,6 +280,10 @@ MapData generate_map(MapGenerationConfig config) {
 				}
                 case TILE_CORRIDOR: {
                     printf("O ");
+                    break;
+                }
+                case TILE_ROOM_ENTRANCE: {
+                    printf("E ");
                     break;
                 }
                 // case TILE_CORRIDOR_MEETING_POINT: {
