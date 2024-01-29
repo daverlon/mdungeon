@@ -192,7 +192,7 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
 		if (movement.x != 0.0f && movement.y != 0.0f) {
 			if (tiles[i_targ_x][(int)en->position.y] == TILE_WALL
 			|| 	tiles[(int)en->position.x][i_targ_y] == TILE_WALL) {
-				printf("Block diagonal movement\n");
+				//printf("Block diagonal movement\n");
 				en->isMoving = false;
 				en->animationState = IDLE;
 				return;
@@ -603,14 +603,19 @@ int main(void/*int argc, char* argv[]*/) {
 		render_player_inventory(playerEntity);
 
 		// pathfinding
-  		Node startPos = (Node){(int)playerEntity->position.x, (int)playerEntity->position.y};
-		Node endPos = (Node){(int)fantano.position.x, (int)fantano.position.y};
-		NodeList path = findPath(mapData.cols, mapData.rows, startPos, endPos, mapData.tiles);
-		printf("Path size: %i\n", path.size);
-		for (size_t i = 0; i < path.size; i++) {
-			printf("%i --- ", i);
-			print_node(path.data[i]);
-		}
+  //		Node startPos = (Node){(int)playerEntity->position.x, (int)playerEntity->position.y};
+		//Node endPos = (Node){(int)fantano.position.x, (int)fantano.position.y};
+		//NodeList path = findPath(mapData.cols, mapData.rows, startPos, endPos, mapData.tiles);
+		///*printf("Path size: %i\n", path.size);
+		//for (size_t i = 0; i < path.size; i++) {
+		//	printf("%i --- ", i);
+		//	print_node(path.data[i]);
+		//}*/
+		PathList pathList = { .path = NULL, .length = 0 };
+		aStarSearch(&mapData, 
+			(Point){(int)playerEntity->position.x, (int)playerEntity->position.y }, 
+			(Point){(int)fantano.position.x, (int)fantano.position.y }, & pathList,
+			false);
 
 		// do rendering
 		BeginDrawing();
@@ -643,7 +648,9 @@ int main(void/*int argc, char* argv[]*/) {
 							case TILE_CORRIDOR:
 							case TILE_FLOOR: {
 								Color clr = LIGHTGREEN;
-								if (inList(&path, (Node){col, row})) {
+								//if (inList(&path, (Node){col, row})) {
+								if (isInPathList(&pathList, (Point) { col, row })) {
+
 										clr = RED;
 								}
 								DrawRectangle(

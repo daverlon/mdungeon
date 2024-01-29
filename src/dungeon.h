@@ -27,6 +27,8 @@ typedef struct {
     // bool skip; // no room here
 } Room;
 
+#define MAX_ROOMS 32
+
 /*
     int n_sectors_x;
     int n_sectors_y;

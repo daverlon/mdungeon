@@ -12,16 +12,25 @@
 
 #define DEF_MAX 999
 
+
 typedef struct {
     int x;
     int y;
+} Point;
+
+typedef struct {
+    Point parent;
+    Point current;
+    int g;
+    int h;
+    int f;
 } Node;
 
 typedef struct {
-    Node data[MAX_NODES];
-    size_t size;
-} NodeList;
+    Point* path;
+    int length;
+} PathList;
 
-extern void print_node(Node node);
-extern bool inList(NodeList* list, Node node);
-extern NodeList findPath(int cols, int rows, Node start, Node end, enum TileType tiles[MAX_COLS][MAX_ROWS]);
+extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
+extern bool isInPathList(PathList* pathList, Point p);
+

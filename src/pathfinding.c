@@ -7,134 +7,170 @@
 
 #include "pathfinding.h"
 
-void initNodeList(NodeList* list) {
-    list->size = 0;
-    // for (size_t i = 0; i < MAX_NODES; i++) {
-    //     list->data[i] = (Node){0, 0}; //with your actual default value
-    // }
+bool isValid(Point point, int cols, int rows) {
+    return (point.x >= 0 && point.x < cols&& point.y >= 0 && point.y < rows);
 }
 
-void pushNode(NodeList* list, Node node) {
-    if (list->size < MAX_NODES) {
-        list->data[list->size++] = node;
+bool isUnblocked(MapData* map, Point point) {
+    return (map->tiles[point.x][point.y] != TILE_WALL);
+}
+
+bool isDestination(Point current, Point dest) {
+    return (current.x == dest.x && current.y == dest.y);
+}
+
+int calculateHValue(Point current, Point dest) {
+    return abs(current.x - dest.x) + abs(current.y - dest.y);
+}
+
+void tracePath(Node** nodeDetails, Point dest, PathList* pathList) {
+    int row = dest.y;
+    int col = dest.x;
+
+    while (!(nodeDetails[row][col].parent.x == col && nodeDetails[row][col].parent.y == row)) {
+        pathList->length++;
+        pathList->path = realloc(pathList->path, pathList->length * sizeof(Point));
+        pathList->path[pathList->length - 1] = (Point){ col, row };
+
+        int tempRow = nodeDetails[row][col].parent.y;
+        col = nodeDetails[row][col].parent.x;
+        row = tempRow;
     }
+
+    pathList->length++;
+    pathList->path = realloc(pathList->path, pathList->length * sizeof(Point));
+    pathList->path[pathList->length - 1] = (Point){ col, row };
 }
 
-Node popNode(NodeList* list) {
-    return list->data[--list->size];
+void freePathList(PathList* pathList) {
+    free(pathList->path);
+    pathList->path = NULL;
+    pathList->length = 0;
 }
 
-bool isEmpty(NodeList* list) {
-    return list->size == 0;
-}
-
-int calculateHeuristic(Node a, Node b) {
-    return abs(a.x - b.x) + abs(a.y - b.y);
-}
-
-bool isValid(int x, int y, int cols, int rows) {
-    return x >= 0 && x < cols && y >= 0 && y < rows;
-}
-
-bool inList(NodeList* list, Node node) {
-    size_t s = list->size;
-    for (size_t i = 0; i < s; i++) {
-        if (list->data[i].x == node.x && list->data[i].y == node.y) {
-            return true;
-        }
+bool isInPathList(PathList* pathList, Point p) {
+    for (int i = 0; i < pathList->length; i++) {
+        if (p.x == pathList->path[i].x &&
+            p.y == pathList->path[i].y) return true;
     }
     return false;
 }
 
-void print_node(Node node) {
-	printf("Node {%i, %i}\n", node.x, node.y);
-}
-
-NodeList findPath(int cols, int rows, Node start, Node end, enum TileType tiles[MAX_COLS][MAX_ROWS]) {
-// NodeList findPath(int cols, int rows, Node start, Node end, enum TileType tiles[MAX_COLS][MAX_ROWS]) {
-
-    if (start.x == end.x && start.y == end.y) {
-        // Start and end positions are the same, return an empty path.
-        NodeList empty_path = {0, NULL};
-        return empty_path;
+void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners) {
+    if (!isValid(src, map->cols, map->rows) || !isValid(dest, map->cols, map->rows)) {
+        printf("Invalid source or destination\n");
+        return;
     }
 
-    NodeList openSet, closedSet;
-    initNodeList(&openSet);
-    initNodeList(&closedSet);
+    if (!isUnblocked(map, src) || !isUnblocked(map, dest)) {
+        printf("Source or destination is blocked\n");
+        return;
+    }
 
-    pushNode(&openSet, start);
+    if (isDestination(src, dest)) {
+        printf("Source is the destination\n");
+        return;
+    }
 
-    int gScore[MAX_COLS][MAX_ROWS];
-    int fScore[MAX_COLS][MAX_ROWS];
+    bool closedList[MAX_COLS][MAX_ROWS];
+    Node** nodeDetails = (Node**)malloc(map->rows * sizeof(Node*));
+    for (int i = 0; i < map->rows; ++i) {
+        nodeDetails[i] = (Node*)malloc(map->cols * sizeof(Node));
+    }
 
-    for (int i = 0; i < cols; i++) {
-        for (int j = 0; j < rows; j++) {
-            gScore[i][j] = 9999;
-            fScore[i][j] = 9999;
+    for (int row = 0; row < map->rows; ++row) {
+        for (int col = 0; col < map->cols; ++col) {
+            closedList[col][row] = false;
+            nodeDetails[row][col].f = INT_MAX;
+            nodeDetails[row][col].g = INT_MAX;
+            nodeDetails[row][col].h = INT_MAX;
+            nodeDetails[row][col].parent.x = -1;
+            nodeDetails[row][col].parent.y = -1;
         }
     }
 
-    gScore[start.x][start.y] = 0;
-    fScore[start.x][start.y] = calculateHeuristic(start, end);
+    int startX = src.x;
+    int startY = src.y;
+    nodeDetails[startY][startX].f = 0;
+    nodeDetails[startY][startX].g = 0;
+    nodeDetails[startY][startX].h = 0;
+    nodeDetails[startY][startX].parent.x = startX;
+    nodeDetails[startY][startX].parent.y = startY;
 
+    while (true) {
+        int minF = INT_MAX;
+        Point current;
 
-    while (!isEmpty(&openSet)) {
-        Node current = popNode(&openSet);
-
-        if (current.x == end.x && current.y == end.y) {
-            // Reconstruct path
-            NodeList path = { 0, NULL };
-            initNodeList(&path);
-            Node temp = current;
-            pushNode(&path, temp);
-            while (temp.x != start.x || temp.y != start.y) {
-                temp = closedSet.data[temp.y * cols + temp.x];  // Corrected indexing
-                pushNode(&path, temp);
-            }
-
-            return path;
-        }
-
-        // Iterate over neighbors
-        int dx[] = {-1, 0, 1, 0};
-        int dy[] = {0, 1, 0, -1};
-        for (int i = 0; i < 4; i++) {
-            int neighborX = current.x + dx[i];
-            int neighborY = current.y + dy[i];
-
-            if (!isValid(neighborX, neighborY, cols, rows))
-                continue;
-
-            // Skip blocked or non-traversable tiles
-            // if (tiles[neighborX][neighborY] != TILE_FLOOR)
-            if (tiles[neighborX][neighborY] == TILE_WALL)
-                continue;
-
-            int tentativeGScore = gScore[current.x][current.y] + 1;
-
-            if (tentativeGScore < gScore[neighborX][neighborY]) {
-                gScore[neighborX][neighborY] = tentativeGScore;
-                fScore[neighborX][neighborY] = tentativeGScore + calculateHeuristic(
-                    (Node){neighborX, neighborY},
-                    end
-                );
-
-                Node neighbor = {neighborX, neighborY};
-
-                // Update parent node in closedSet
-                closedSet.data[neighborY * rows + neighborX] = current;
-
-                if (!inList(&openSet, neighbor)) {
-                    pushNode(&openSet, neighbor);
+        for (int row = 0; row < map->rows; ++row) {
+            for (int col = 0; col < map->cols; ++col) {
+                if (!closedList[col][row] && nodeDetails[row][col].f < minF) {
+                    minF = nodeDetails[row][col].f;
+                    current.x = col;
+                    current.y = row;
                 }
             }
+        }
 
-            // printf("hehe\n");
+        if (minF == INT_MAX) {
+            printf("Destination not reachable\n");
+            break;
+        }
+
+        closedList[current.x][current.y] = true;
+
+        for (int i = -1; i <= 1; ++i) {
+            for (int j = -1; j <= 1; ++j) {
+                Point neighbor = { current.x + i, current.y + j };
+
+                if (isValid(neighbor, map->cols, map->rows) && isUnblocked(map, neighbor)) {
+                    // Skip the center tile
+                    if (i == 0 && j == 0) {
+                        continue;
+                    }
+
+                    // Check for corner cutting prevention
+                    if (!cut_corners && (i != 0 && j != 0)) {
+                        // Check if adjacent tiles are unblocked
+                        if (!isUnblocked(map, (Point) { current.x + i, current.y }) ||
+                            !isUnblocked(map, (Point) { current.x, current.y + j })) {
+                            continue;  // Skip diagonal movement if cutting corners
+                        }
+                    }
+
+                    int gNew = nodeDetails[current.y][current.x].g + 1;
+
+                    // Adjust the cost for diagonal movements
+                    if (i != 0 && j != 0) {
+                        gNew = nodeDetails[current.y][current.x].g + 1.4;  // Diagonal cost
+                    }
+
+                    int hNew = calculateHValue(neighbor, dest);
+                    int fNew = gNew + hNew;
+
+                    if (isValid(neighbor, map->cols, map->rows) &&
+                        !closedList[neighbor.x][neighbor.y] &&
+                        isUnblocked(map, neighbor) &&
+                        fNew < nodeDetails[neighbor.y][neighbor.x].f) {
+                        nodeDetails[neighbor.y][neighbor.x].f = fNew;
+                        nodeDetails[neighbor.y][neighbor.x].g = gNew;
+                        nodeDetails[neighbor.y][neighbor.x].h = hNew;
+                        nodeDetails[neighbor.y][neighbor.x].parent.x = current.x;
+                        nodeDetails[neighbor.y][neighbor.x].parent.y = current.y;
+                    }
+                }
+            }
+        }
+ 
+        if (isDestination(current, dest)) {
+            //printf("Destination reached!\n");
+            tracePath(nodeDetails, dest, pathList);
+            break;
         }
     }
 
-    NodeList emptyList;
-    initNodeList(&emptyList);
-    return emptyList; // No path found
+    // Free allocated memory
+    for (int i = 0; i < map->rows; ++i) {
+        free(nodeDetails[i]);
+    }
+    free(nodeDetails);
 }

@@ -4,7 +4,7 @@
 
 #include "dungeon.h"
 
-void print_map(int cols, int rows, int tiles[cols][rows]) {
+void print_map(int cols, int rows, enum TileType tiles[MAX_COLS][MAX_ROWS]) {
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
             printf("%d ", tiles[col][row]);
@@ -105,7 +105,7 @@ MapData generate_map(MapGenerationConfig config) {
     }
     // printf("LOL\n");
 
-    Room rooms[n_sectors]; 
+    Room rooms[MAX_ROOMS];
     for (int i = 0; i < n_sectors; i++) {
         rooms[i] = (Room){
             .x = 0,
