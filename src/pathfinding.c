@@ -7,6 +7,8 @@
 
 #include "pathfinding.h"
 
+#define INT_MAX 99999
+
 bool isValid(Point point, int cols, int rows) {
     return (point.x >= 0 && point.x < cols&& point.y >= 0 && point.y < rows);
 }

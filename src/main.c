@@ -433,7 +433,7 @@ void delete_item(const int index, int* counter, Item* items) {
     printf("Deleted item index: %i, %i instances left on map.\n", index, *counter);
 }
 
-void spawn_items(enum ITEM_TYPE itemType, int* mapItemCounter, Item* mapItems, const MapData* mapData, int min, int max) {
+void spawn_items(enum ItemType itemType, int* mapItemCounter, Item* mapItems, const MapData* mapData, int min, int max) {
     if (*mapItemCounter >= MAX_INSTANCES || *mapItemCounter + max >= MAX_INSTANCES) {
         printf("Error: [Spawn Items] mapItemCounter already at maximum instances.\n");
         return;

@@ -12,7 +12,6 @@
 
 #define DEF_MAX 999
 
-
 typedef struct {
     int x;
     int y;
@@ -32,7 +31,9 @@ typedef struct {
 } PathList;
 
 //extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
-extern void dijkstra(MapData* map, Point src, Point dest, PathList* pathList);
+// extern void dijkstra(MapData* map, Point src, Point dest, PathList* pathList);
+// extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList);
+extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
 
 extern bool isInPathList(PathList* pathList, Point p);
 
