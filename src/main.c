@@ -32,7 +32,7 @@ const int worldWidth = 32 * 14;
 #define TILE_SIZE 160
 // #define TILE_SIZE 256
 
-#define GRID_MOVESPEED 4.0f
+#define GRID_MOVESPEED 3.0f
 #define POSITION_THRESHOLD 0.05f
 
 #define LOAD_ZOR_TEXTURE() (LoadTexture("res/zor/zor_spritesheet.png"))
@@ -254,7 +254,6 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
                 break;
             }
         }
-
     }
 }
 
@@ -306,12 +305,17 @@ void move_entity_freely(Entity* en) {
 void update_animation(Animation* anim) {
     anim->curFrameTime += GetFrameTime();
 
-    // Calculate the number of frames to advance based on elapsed time
+    // calculate the number of frames to advance based on elapsed time
     int framesToAdvance = (int)(anim->curFrameTime / anim->maxFrameTime);
     anim->curFrameTime -= framesToAdvance * anim->maxFrameTime;
 
-    // Advance the frame by the calculated amount
-    anim->curFrame = (anim->curFrame + framesToAdvance) % anim->nFrames;
+    // advance the frame by the calculated amount
+
+    //anim->curFrame = (anim->curFrame + framesToAdvance) % anim->nFrames;
+    anim->curFrame = (anim->curFrame + framesToAdvance);
+    if (anim->curFrame % anim->nFrames + 1 == 0) {
+        anim->curFrame = 0;
+    }
 }
 
 Vector2 position_to_grid_position(Vector2 pos) {
@@ -369,13 +373,13 @@ void update_zor_animation(Entity* zor) {
         break;
     }
     case MOVE: {
-        zor->animation.maxFrameTime = 0.02f;
+        zor->animation.maxFrameTime = 0.025f;
         // zor->animation.yOffset = 2048.0f;
         zor->animation.yOffset = 2048;
         break;
     }
     case ATTACK_MELEE: {
-        zor->animation.maxFrameTime = 0.015f;
+        zor->animation.maxFrameTime = 0.017f;
         zor->animation.yOffset = 2048 + 2048;
         if (zor->animation.curFrame == zor->animation.nFrames) {
             zor->animationState = IDLE;
@@ -581,10 +585,9 @@ int main(void/*int argc, char* argv[]*/) {
     int window_height = 720;
 
     InitWindow(window_width, window_height, "mDungeon");
-    //SetWindowState(FLAG_VSYNC_HINT);
-
+    SetWindowState(FLAG_VSYNC_HINT);
     SetWindowState(FLAG_WINDOW_RESIZABLE);
-    SetTargetFPS(30);
+    //SetTargetFPS(144);
 
     Camera2D camera = { 0 };
     {
