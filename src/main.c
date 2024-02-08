@@ -41,6 +41,7 @@ const int worldWidth = 32 * 14;
 
 #define LOAD_SPILLEDCUP_TEXTURE() (LoadTexture("res/items/item_spilledcup.png"))
 #define LOAD_STICK_TEXTURE() (LoadTexture("res/items/item_stick.png"))
+#define LOAD_APPLE_TEXTURE() (LoadTexture("res/items/item_apple.png"))
 
 #define MAX_INSTANCES 32
 #define INVENTORY_SIZE 32
@@ -62,13 +63,15 @@ enum Direction {
 
 enum AnimationState {
     IDLE,
-    MOVE
+    MOVE,
+    ATTACK_MELEE
 };
 
 enum ItemType {
     ITEM_NOTHING,
     ITEM_SPILLEDCUP,
-    ITEM_STICK
+    ITEM_STICK,
+    ITEM_APPLE
 };
 
 //
@@ -144,14 +147,9 @@ Vector2 direction_to_vector2(enum Direction direction) {
 
 void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
 
-    /*if (!IsKeyDown(KEY_S) && !IsKeyDown(KEY_W) && !IsKeyDown(KEY_A) && !IsKeyDown(KEY_D)) {
-        en->isMoving = false;
-        en->animationState = IDLE;
-        return;
-    }*/
-
     // if no key is held, ensure that isMoving is set to false
     if (en->isMoving) return;
+    if (en->animationState == ATTACK_MELEE) return;
     en->animationState = IDLE;
 
     bool shouldMove = false;
@@ -166,7 +164,7 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
         else {
             en->direction = DOWN;
         }
-        shouldMove = true;
+		shouldMove = true;
     }
 
     if (IsKeyDown(KEY_W)) {
@@ -179,19 +177,26 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
         else {
             en->direction = UP;
         }
-        shouldMove = true;
+		shouldMove = true;
     }
 
     if (IsKeyDown(KEY_A) && !IsKeyDown(KEY_W) && !IsKeyDown(KEY_S)) {
         en->direction = LEFT;
-        shouldMove = true;
+		shouldMove = true;
     }
     else if (IsKeyDown(KEY_D) && !IsKeyDown(KEY_W) && !IsKeyDown(KEY_S)) {
         en->direction = RIGHT;
-        shouldMove = true;
+		shouldMove = true;
     }
 
+    if (IsKeyDown(KEY_SPACE) && shouldMove) {
+        shouldMove = false;
+    }
 
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !shouldMove) {
+        en->animationState = ATTACK_MELEE;
+        en->animation.curFrame = 0;
+    }
 
     // this may be a bit scuffed. unecessary extra checks here?
     Vector2 movement = direction_to_vector2(en->direction);
@@ -344,8 +349,6 @@ void render_entity(Entity* en) {
 
 Entity create_zor_entity_instance(Vector2 pos) {
     Entity en = { 0 };
-    // en.animation.maxFrameTime = 0.02f; // run/walk frametime
-    // en.texture = LOAD_ZOR_TEXTURE();
     en.position = pos;
     en.animation.nFrames = 20;
     return en;
@@ -355,19 +358,30 @@ void update_zor_animation(Entity* zor) {
 
     // higher fps seems to speed this up
     switch (zor->animationState) {
-    case IDLE:
+    case IDLE: {
         zor->animation.maxFrameTime = 0.0f;
         zor->animation.yOffset = 0;
         break;
-    case MOVE:
+    }
+    case MOVE: {
         zor->animation.maxFrameTime = 0.02f;
         // zor->animation.yOffset = 2048.0f;
-        zor->animation.yOffset = 256 * 8;
+        zor->animation.yOffset = 2048;
         break;
-    default:
+    }
+    case ATTACK_MELEE: {
+        zor->animation.maxFrameTime = 0.015f;
+        zor->animation.yOffset = 2048 + 2048;
+        if (zor->animation.curFrame >= zor->animation.nFrames) {
+            zor->animationState = IDLE;
+        }
+        break;
+    }
+    default: {
         zor->animation.maxFrameTime = 0.0f;
         zor->animation.yOffset = 0;
         break;
+    }
     }
 
     float* ft = &zor->animation.curFrameTime;
@@ -385,6 +399,16 @@ void update_zor_animation(Entity* zor) {
         (*ft) = 0.0f;
     }
     //printf("Cur frame: %i\n", *cf);
+}
+
+Vector2 find_random_empty_floor_tile(const MapData* mapData) {
+    int col = GetRandomValue(0, MAX_COLS);
+    int row = GetRandomValue(0, MAX_ROWS);
+    while (mapData->tiles[col][row] != TILE_FLOOR) {
+        col = GetRandomValue(0, MAX_COLS);
+        row = GetRandomValue(0, MAX_ROWS);
+    }
+    return (Vector2) { col, row };
 }
 
 void create_item_instance(Item item, int* counter, Item* items) {
@@ -525,29 +549,27 @@ void render_player_inventory(Entity* player) {
     const int c = player->inventoryItemCount;
     const int yOffset = 100;
     const int gap = 30;
-    char msgbuff[64];
     DrawText("Inventory", 10, yOffset - gap, 24, WHITE);
     for (int i = 0; i < c; i++) {
         switch (player->inventory[i]) {
-        default:
-            printf("idk\n");
-            break;
-        case ITEM_NOTHING:
-            printf("Error: ITEM_NOTHING present in player inventory.");
-            break;
-        case ITEM_SPILLEDCUP:
-        {
-            // sprintf_s(msgbuff, 32, "%i: ITEM_SPILLEDCUP", i + 1);
-            DrawText("Something", 10, yOffset + (i * gap), 24, WHITE);
-            // DrawText(msgbuff, 10, yOffset + (i * gap), 24, WHITE);
-            // printf("Item %i: ITEM_SPILLEDCUP\n", i);
+        default: {
+            printf("Default\n");
             break;
         }
-        case ITEM_STICK:
-        {
-            // sprintf_s(msgbuff, 32, "%i: ITEM_STICK", i + 1);
-            DrawText(msgbuff, 10, yOffset + (i * gap), 24, WHITE);
-            // printf("Item %i: ITEM_SPILLEDCUP\n", i);
+        case ITEM_NOTHING: {
+            printf("Error: ITEM_NOTHING present in player inventory.");
+            break;
+        }
+        case ITEM_SPILLEDCUP: {
+            DrawText("SpilledCup", 10, yOffset + (i * gap), 24, WHITE);
+            break;
+        }
+        case ITEM_STICK: {
+            DrawText("Stick", 10, yOffset + (i * gap), 24, WHITE);
+            break;
+        }
+        case ITEM_APPLE: {
+            DrawText("Apple", 10, yOffset + (i * gap), 24, WHITE);
             break;
         }
         }
@@ -562,55 +584,48 @@ void set_gamestate(GameStateInfo *gsi, enum GameState state) {
 
 int main(void/*int argc, char* argv[]*/) {
 
-    //enum gameState = GS_INTRO_DUNGEON; 
     GameStateInfo gsi = { GS_INTRO_DUNGEON, false };
 
-    int windowWidth = 1280;
-    int windowHeight = 720;
+    int window_width = 1280;
+    int window_height = 720;
 
-    // int windowWidth = GetScreenWidth();
-    // int windowHeight = GetScreenHeight();
-    InitWindow(windowWidth, windowHeight, "mDungeon");
+    InitWindow(window_width, window_height, "mDungeon");
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     SetTargetFPS(60);
-    // SetWindowState(FLAG_WINDOW_MINIMIZED);
 
     Camera2D camera = { 0 };
-    camera.offset = (Vector2){ windowWidth / 2, windowHeight / 2 };
-    camera.target = (Vector2){ 0.0f, 0.0f };
-    camera.rotation = 0.0f;
-    camera.zoom = 1.0f;
-    // camera.zoom = 0.1f;
+    {
+        camera.offset = (Vector2){ window_width / 2, window_height / 2 };
+        camera.target = (Vector2){ 0.0f, 0.0f };
+        camera.rotation = 0.0f;
+        camera.zoom = 1.0f;
+    }
 
     Entity fantano = { 0 };
-    fantano.texture = LOAD_FANTANO_TEXTURE();
-    fantano.position = (Vector2){ 5.0f, 5.0f };
-    fantano.animation.nFrames = 20;
+    {
+        fantano.texture = LOAD_FANTANO_TEXTURE();
+        fantano.position = (Vector2){ 5.0f, 5.0f };
+        fantano.animation.nFrames = 20;
+	}
 
     Entity cyhar = { 0 };
-    cyhar.texture = LOAD_CYHAR_TEXTURE();
-    cyhar.position = (Vector2){ 1.0f, 0.0f };
-    cyhar.animation.nFrames = 20;
+    {
+        cyhar.texture = LOAD_CYHAR_TEXTURE();
+        cyhar.position = (Vector2){ 1.0f, 0.0f };
+        cyhar.animation.nFrames = 20;
+    }
 
     Entity zor = create_zor_entity_instance((Vector2) { 7.0f, 7.0f });
     zor.texture = LOAD_ZOR_TEXTURE();
 
-    Entity* playerEntity = { 0 };
-    playerEntity = &zor;
-    // playerEntity = &fantano;
-
     Item mapItems[MAX_INSTANCES];
     int mapItemCounter = 0;
     nullify_all_items(&mapItemCounter, mapItems);
+
     // todo: large texture containing multiple item sprites?
     Texture2D spilledCupTx = LOAD_SPILLEDCUP_TEXTURE();
     Texture2D stickTx = LOAD_STICK_TEXTURE();
-
-    /*create_item_instance((Item) { ITEM_SPILLEDCUP, (Vector2) { 2.0f, 2.0f }, false }, & mapItemCounter, mapItems);
-    create_item_instance((Item) { ITEM_SPILLEDCUP, (Vector2) { 3.0f, 1.0f }, false }, & mapItemCounter, mapItems);
-    create_item_instance((Item) { ITEM_STICK, (Vector2) { 5.0f, 3.0f }, false }, & mapItemCounter, mapItems);*/
-    // delete_item(0, &mapItemCounter, mapItems);
-    //
+    Texture2D appleTx = LOAD_APPLE_TEXTURE();
 
     MapData mapData = { 0 };
     int current_floor = 0; 
@@ -619,9 +634,9 @@ int main(void/*int argc, char* argv[]*/) {
     while (!WindowShouldClose()) {
 
         if (IsWindowResized()) {
-            windowWidth = GetScreenWidth();
-            windowHeight = GetScreenHeight();
-            camera.offset = (Vector2){ windowWidth / 2.0f, windowHeight / 2.0f };
+            window_width = GetScreenWidth();
+            window_height = GetScreenHeight();
+            camera.offset = (Vector2){ window_width / 2.0f, window_height / 2.0f };
         }
 
         // handle events
@@ -636,11 +651,8 @@ int main(void/*int argc, char* argv[]*/) {
         }
 
         // update game logic
-        //
-        //
-        
         switch (gsi.gameState) {
-            case GS_INTRO_DUNGEON: {
+			case GS_INTRO_DUNGEON: {
                 // init intro dungeon
                 if (!gsi.init) {
                     // init intro dungeon
@@ -651,7 +663,7 @@ int main(void/*int argc, char* argv[]*/) {
                         &mapItemCounter,
                         mapItems,
                         &mapData,
-                        3, 6
+                        1, 3
                     );
                     spawn_items(
                         ITEM_STICK,
@@ -660,6 +672,17 @@ int main(void/*int argc, char* argv[]*/) {
                         &mapData,
                         4, 8
                     );
+                    spawn_items(
+                        ITEM_APPLE,
+                        &mapItemCounter,
+                        mapItems,
+                        &mapData,
+                        2, 5
+                    );
+                    zor.isMoving = false;
+                    zor.animationState = IDLE;
+                    zor.position = find_random_empty_floor_tile(&mapData);
+                    fantano.position = find_random_empty_floor_tile(&mapData);
 					printf("Init basic dungeon.\n");
                     gsi.init = true;
                 }
@@ -687,12 +710,12 @@ int main(void/*int argc, char* argv[]*/) {
                 break;
             }
         }
-        control_entity(playerEntity, mapData.tiles);
-        move_entity(playerEntity); // perhaps move_entities (once there is ai)
+        control_entity(&zor, mapData.tiles);
+        move_entity(&zor); // perhaps move_entities (once there is ai)
         // move_entity_freely(playerEntity);
 
-        if (IsKeyPressed(KEY_E) && playerEntity->inventoryItemCount > 0) {
-            drop_item(playerEntity->inventoryItemCount - 1, playerEntity, &mapItemCounter, mapItems);
+        if (IsKeyPressed(KEY_E) && zor.inventoryItemCount > 0) {
+            drop_item(zor.inventoryItemCount - 1, &zor, &mapItemCounter, mapItems);
         }
 
         update_animation_frame(&fantano.animation);
@@ -700,19 +723,19 @@ int main(void/*int argc, char* argv[]*/) {
         // updateAnimationFrame(&zor.animation);
         update_zor_animation(&zor);
 
-        Vector2 camTarget = Vector2Multiply(playerEntity->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+        Vector2 camTarget = Vector2Multiply(zor.position, (Vector2) { TILE_SIZE, TILE_SIZE });
         camTarget.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
         camTarget.y += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 4);
         camera.target = camTarget;
 
-        scan_items_for_pickup(&mapItemCounter, mapItems, playerEntity);
+        scan_items_for_pickup(&mapItemCounter, mapItems, &zor);
 
-        render_player_inventory(playerEntity);
+        render_player_inventory(&zor);
 
         PathList pathList = { .path = NULL, .length = 0 };
         aStarSearch(
             &mapData,
-            (Point) {(int)playerEntity->position.x, (int)playerEntity->position.y},
+            (Point) {(int)zor.position.x, (int)zor.position.y},
             (Point) {(int)fantano.position.x, (int)fantano.position.y}, 
             & pathList,
             false
@@ -724,22 +747,12 @@ int main(void/*int argc, char* argv[]*/) {
             ClearBackground(DARKBROWN);
             DrawFPS(10, 5);
 
-            DrawLine(windowWidth / 2, 0, windowWidth / 2, windowHeight, GREEN_SEMI_TRANSPARENT);
-            DrawLine(0, windowHeight / 2, windowWidth, windowHeight / 2, GREEN_SEMI_TRANSPARENT);
+            DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
+            DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
 
             BeginMode2D(camera);
             {
-                // DrawRectangle(0, SPRITE_SIZE / 4, 8 * TILE_SIZE, 8 * TILE_SIZE, LIGHTGREEN);
-                // for (int x = 0; x < 8; x++) {
-                //  for (int y = 0; y < 8; y++) {
-                //      DrawRectangleLines(x * TILE_SIZE, SPRITE_SIZE / 4 + y * TILE_SIZE, TILE_SIZE, TILE_SIZE, WHITE_SEMI_TRANSPARENT);
-                //  }
-                // }
-                // render_dungeon(&map);
-
-                //
                 // render map
-                //
                 for (int row = 0; row < mapData.rows; row++) {
                     for (int col = 0; col < mapData.cols; col++){
                         switch (mapData.tiles[col][row]) {
@@ -758,16 +771,24 @@ int main(void/*int argc, char* argv[]*/) {
                             case TILE_FLOOR: {
                                 Color clr = LIGHTGREEN;
                                 //if (inList(&path, (Node){col, row})) {
-                                if (isInPathList(&pathList, (Point) { col, row })) {
-
-                                        clr = RED;
-                                }
+                                /*if (isInPathList(&pathList, (Point) { col, row })) {
+								    clr = RED;
+                                }*/
                                 DrawRectangle(
                                     col * TILE_SIZE,
                                     row * TILE_SIZE, 
                                     TILE_SIZE, 
                                     TILE_SIZE,
                                     clr);
+
+                                if (IsKeyDown(KEY_SPACE)) {
+									DrawRectangleLines(
+                                        col* TILE_SIZE,
+                                        row* TILE_SIZE,
+                                        TILE_SIZE,
+                                        TILE_SIZE,
+                                        BLACK_SEMI_TRANSPARENT);
+                                }
                                 break;
                             }
                             case TILE_INVALID: {
@@ -781,6 +802,7 @@ int main(void/*int argc, char* argv[]*/) {
                         }
                     }
                 }
+      
                 // echo map layout to console
                 if (IsKeyPressed(KEY_V)) {
                     for (int row = 0; row < mapData.rows; row++) {
@@ -819,19 +841,23 @@ int main(void/*int argc, char* argv[]*/) {
 
                 // render items
 				for (int i = 0; i < mapItemCounter; i++) {
-					switch (mapItems[i].type) {
-					case ITEM_NOTHING: {
-						printf("Error: Tried to render ITEM_NOTHING.");
-						break;
-					}
-					case ITEM_SPILLEDCUP: {
-						DrawTextureRec(spilledCupTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
-						break;
-					}
-					case ITEM_STICK: {
-						DrawTextureRec(stickTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
-						break;
-					}
+                    switch (mapItems[i].type) {
+                    case ITEM_NOTHING: {
+                        printf("Error: Tried to render ITEM_NOTHING.");
+                        break;
+                    }
+                    case ITEM_SPILLEDCUP: {
+                        DrawTextureRec(spilledCupTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
+                        break;
+                    }
+                    case ITEM_STICK: {
+                        DrawTextureRec(stickTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
+                        break;
+                    }
+                    case ITEM_APPLE: {
+                        DrawTextureRec(appleTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
+                        break;
+                    }
 					default: {
 						printf("Idk\n");
 						break;
