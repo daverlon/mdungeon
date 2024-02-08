@@ -110,6 +110,13 @@ typedef struct {
     int inventoryItemCount;
 } Entity;
 
+// turn queue (queue size should be limited to max entities per turn)
+typedef struct {
+    Entity entity;
+
+} Turn;
+
+
 typedef struct {
     enum ItemType type;
     Vector2 position; // grid coordinate position
@@ -256,30 +263,31 @@ void move_entity(Entity* en) {
     // (when entity is moving)
     if (!en->isMoving) return;
 
-    // printf("%2.5f, %2.5f\n", en->position.x, en->position.y);
-    // printf("%2.5f, %2.5f\n", en->position.x, en->position.y);
-
     const Vector2 movement = direction_to_vector2(en->direction);
-    // printf("Cur: %2.5f, %2.5f\n", en->position.x, en->position.y);
-    // printf("Tar: %2.5f, %2.5f\n", en->position.x + movement.x, en->position.y + movement.y);
 
-    // linear interpolation
-    // en->position.x = Lerp(en->position.x, en->targetPosition.x, t);
-    // en->position.y = Lerp(en->position.y, en->targetPosition.y, t);
+    // Calculate the maximum allowed movement distance for this frame based on the frame time
+    float maxMoveDistance = GetFrameTime() * GRID_MOVESPEED;
 
-    // const Vector2 
-    // if ()
+    // Calculate the distance to the target position
+    float distanceToTarget = Vector2Distance(en->position, en->targetPosition);
 
-    en->position.x += movement.x * GetFrameTime() * GRID_MOVESPEED;
-    en->position.y += movement.y * GetFrameTime() * GRID_MOVESPEED;
+    // If the maximum move distance exceeds the distance to the target position,
+    // adjust the maxMoveDistance to ensure the character doesn't overshoot
+    if (maxMoveDistance > distanceToTarget) {
+        maxMoveDistance = distanceToTarget;
+    }
 
-    // Check if the entity has reached the target position
-    float distance = Vector2Distance(en->position, en->targetPosition);
-    if (distance < POSITION_THRESHOLD) {
-        en->position = en->targetPosition;  // Ensure exact position when close
+    // Check if the remaining distance to the target is smaller than the movement distance
+    if (maxMoveDistance >= distanceToTarget) {
+        // Snap directly to the target position
+        en->position = en->targetPosition;
         en->isMoving = false;
         en->animationState = IDLE;
-        // printf("Moved entity to X: %2.0f -> %2.0f\n", en->position.x, en->position.x+1.0f);
+    }
+    else {
+        // Apply movement
+        en->position.x += movement.x * maxMoveDistance;
+        en->position.y += movement.y * maxMoveDistance;
     }
 }
 
@@ -295,18 +303,15 @@ void move_entity_freely(Entity* en) {
     en->isMoving = false;
 }
 
-void update_animation_frame(Animation* anim) {
-    float* ft = &anim->curFrameTime;
-    (*ft) += GetFrameTime();
-    int* cf = &anim->curFrame;
+void update_animation(Animation* anim) {
+    anim->curFrameTime += GetFrameTime();
 
-    if ((*cf) >= anim->nFrames) {
-        (*cf) = 0;
-    }
-    else {
-        (*cf)++;
-    }
-    (*ft) = 0.0f;
+    // Calculate the number of frames to advance based on elapsed time
+    int framesToAdvance = (int)(anim->curFrameTime / anim->maxFrameTime);
+    anim->curFrameTime -= framesToAdvance * anim->maxFrameTime;
+
+    // Advance the frame by the calculated amount
+    anim->curFrame = (anim->curFrame + framesToAdvance) % anim->nFrames;
 }
 
 Vector2 position_to_grid_position(Vector2 pos) {
@@ -359,7 +364,7 @@ void update_zor_animation(Entity* zor) {
     // higher fps seems to speed this up
     switch (zor->animationState) {
     case IDLE: {
-        zor->animation.maxFrameTime = 0.0f;
+        zor->animation.maxFrameTime = 0.01f;
         zor->animation.yOffset = 0;
         break;
     }
@@ -372,7 +377,7 @@ void update_zor_animation(Entity* zor) {
     case ATTACK_MELEE: {
         zor->animation.maxFrameTime = 0.015f;
         zor->animation.yOffset = 2048 + 2048;
-        if (zor->animation.curFrame >= zor->animation.nFrames) {
+        if (zor->animation.curFrame == zor->animation.nFrames) {
             zor->animationState = IDLE;
         }
         break;
@@ -384,21 +389,7 @@ void update_zor_animation(Entity* zor) {
     }
     }
 
-    float* ft = &zor->animation.curFrameTime;
-    *ft += GetFrameTime();
-    int* cf = &zor->animation.curFrame;
-
-    //printf("Max frames: %i\n", zor->animation.nFrames);
-    if (*ft >= zor->animation.maxFrameTime) {
-        if (*cf >= zor->animation.nFrames) {
-            (*cf) = 0;
-        }
-        else {
-            (*cf)++;
-        }
-        (*ft) = 0.0f;
-    }
-    //printf("Cur frame: %i\n", *cf);
+    update_animation(&zor->animation);
 }
 
 Vector2 find_random_empty_floor_tile(const MapData* mapData) {
@@ -590,8 +581,10 @@ int main(void/*int argc, char* argv[]*/) {
     int window_height = 720;
 
     InitWindow(window_width, window_height, "mDungeon");
+    //SetWindowState(FLAG_VSYNC_HINT);
+
     SetWindowState(FLAG_WINDOW_RESIZABLE);
-    SetTargetFPS(60);
+    SetTargetFPS(30);
 
     Camera2D camera = { 0 };
     {
@@ -605,6 +598,7 @@ int main(void/*int argc, char* argv[]*/) {
     {
         fantano.texture = LOAD_FANTANO_TEXTURE();
         fantano.position = (Vector2){ 5.0f, 5.0f };
+        fantano.animation.maxFrameTime = 0.017f;
         fantano.animation.nFrames = 20;
 	}
 
@@ -718,9 +712,8 @@ int main(void/*int argc, char* argv[]*/) {
             drop_item(zor.inventoryItemCount - 1, &zor, &mapItemCounter, mapItems);
         }
 
-        update_animation_frame(&fantano.animation);
-        update_animation_frame(&cyhar.animation);
-        // updateAnimationFrame(&zor.animation);
+        update_animation(&fantano.animation);
+        update_animation(&cyhar.animation);
         update_zor_animation(&zor);
 
         Vector2 camTarget = Vector2Multiply(zor.position, (Vector2) { TILE_SIZE, TILE_SIZE });
@@ -730,39 +723,45 @@ int main(void/*int argc, char* argv[]*/) {
 
         scan_items_for_pickup(&mapItemCounter, mapItems, &zor);
 
-        render_player_inventory(&zor);
-
-        PathList pathList = { .path = NULL, .length = 0 };
-        aStarSearch(
-            &mapData,
-            (Point) {(int)zor.position.x, (int)zor.position.y},
-            (Point) {(int)fantano.position.x, (int)fantano.position.y}, 
-            & pathList,
-            false
-        );
-
-        // do rendering
-        BeginDrawing();
+        // render
         {
-            ClearBackground(DARKBROWN);
-            DrawFPS(10, 5);
+            render_player_inventory(&zor);
 
-            DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
-            DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
+            PathList pathList = { .path = NULL, .length = 0 };
+			aStarSearch(
+				&mapData,
+				(Point) {
+				(int)zor.position.x, (int)zor.position.y
+			},
+				(Point) {
+				(int)fantano.position.x, (int)fantano.position.y
+			},
+					& pathList,
+					false
+					);
 
-            BeginMode2D(camera);
+            // do rendering
+            BeginDrawing();
             {
-                // render map
-                for (int row = 0; row < mapData.rows; row++) {
-                    for (int col = 0; col < mapData.cols; col++){
-                        switch (mapData.tiles[col][row]) {
+                ClearBackground(DARKBROWN);
+                DrawFPS(10, 5);
+
+                DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
+                DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
+
+                BeginMode2D(camera);
+                {
+                    // render map
+                    for (int row = 0; row < mapData.rows; row++) {
+                        for (int col = 0; col < mapData.cols; col++) {
+                            switch (mapData.tiles[col][row]) {
                             case TILE_WALL: {
                                 break;
                             }
                             case TILE_ROOM_ENTRANCE: {
                                 DrawRectangle(
-                                    col* TILE_SIZE,
-                                    row* TILE_SIZE,
+                                    col * TILE_SIZE,
+                                    row * TILE_SIZE,
                                     TILE_SIZE,
                                     TILE_SIZE,
                                     LIGHTBLUE);
@@ -772,19 +771,19 @@ int main(void/*int argc, char* argv[]*/) {
                                 Color clr = LIGHTGREEN;
                                 //if (inList(&path, (Node){col, row})) {
                                 /*if (isInPathList(&pathList, (Point) { col, row })) {
-								    clr = RED;
+                                    clr = RED;
                                 }*/
                                 DrawRectangle(
                                     col * TILE_SIZE,
-                                    row * TILE_SIZE, 
-                                    TILE_SIZE, 
+                                    row * TILE_SIZE,
+                                    TILE_SIZE,
                                     TILE_SIZE,
                                     clr);
 
                                 if (IsKeyDown(KEY_SPACE)) {
-									DrawRectangleLines(
-                                        col* TILE_SIZE,
-                                        row* TILE_SIZE,
+                                    DrawRectangleLines(
+                                        col * TILE_SIZE,
+                                        row * TILE_SIZE,
                                         TILE_SIZE,
                                         TILE_SIZE,
                                         BLACK_SEMI_TRANSPARENT);
@@ -799,79 +798,81 @@ int main(void/*int argc, char* argv[]*/) {
                                 // printf("? ");
                                 break;
                             }
-                        }
-                    }
-                }
-      
-                // echo map layout to console
-                if (IsKeyPressed(KEY_V)) {
-                    for (int row = 0; row < mapData.rows; row++) {
-                        for (int col = 0; col < mapData.cols; col++) {
-                            switch (mapData.tiles[col][row]) {
-                            case TILE_WALL: {
-                                printf("~ ");
-                                break;
-                            }
-                            case TILE_CORRIDOR:
-                            case TILE_FLOOR: {
-
-                                //if (inList(&path, (Node){col, row})) {
-                                if (isInPathList(&pathList, (Point) { col, row })) {
-                                    printf("P ");
-                                } else
-                                printf("X ");
-                                break;
-                            }
-                            case TILE_INVALID: {
-                                break;
-                            }
-                            case TILE_ROOM_ENTRANCE: {
-                                break;
-                            }
-                            default: {
-                                printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, mapData.tiles[col][row]);
-                                // printf("? ");
-                                break;
-                            }
                             }
                         }
-                        printf("\n");
                     }
+
+                    // echo map layout to console
+                    if (IsKeyPressed(KEY_V)) {
+                        for (int row = 0; row < mapData.rows; row++) {
+                            for (int col = 0; col < mapData.cols; col++) {
+                                switch (mapData.tiles[col][row]) {
+                                case TILE_WALL: {
+                                    printf("~ ");
+                                    break;
+                                }
+                                case TILE_CORRIDOR:
+                                case TILE_FLOOR: {
+
+                                    //if (inList(&path, (Node){col, row})) {
+                                    if (isInPathList(&pathList, (Point) { col, row })) {
+                                        printf("P ");
+                                    }
+                                    else
+                                        printf("X ");
+                                    break;
+                                }
+                                case TILE_INVALID: {
+                                    break;
+                                }
+                                case TILE_ROOM_ENTRANCE: {
+                                    break;
+                                }
+                                default: {
+                                    printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, mapData.tiles[col][row]);
+                                    // printf("? ");
+                                    break;
+                                }
+                                }
+                            }
+                            printf("\n");
+                        }
+                    }
+
+                    // render items
+                    for (int i = 0; i < mapItemCounter; i++) {
+                        switch (mapItems[i].type) {
+                        case ITEM_NOTHING: {
+                            printf("Error: Tried to render ITEM_NOTHING.");
+                            break;
+                        }
+                        case ITEM_SPILLEDCUP: {
+                            DrawTextureRec(spilledCupTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
+                            break;
+                        }
+                        case ITEM_STICK: {
+                            DrawTextureRec(stickTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
+                            break;
+                        }
+                        case ITEM_APPLE: {
+                            DrawTextureRec(appleTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
+                            break;
+                        }
+                        default: {
+                            printf("Idk\n");
+                            break;
+                        }
+                        }
+                    }
+
+                    render_entity(&cyhar);
+                    render_entity(&fantano);
+                    render_entity(&zor);
                 }
-
-                // render items
-				for (int i = 0; i < mapItemCounter; i++) {
-                    switch (mapItems[i].type) {
-                    case ITEM_NOTHING: {
-                        printf("Error: Tried to render ITEM_NOTHING.");
-                        break;
-                    }
-                    case ITEM_SPILLEDCUP: {
-                        DrawTextureRec(spilledCupTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
-                        break;
-                    }
-                    case ITEM_STICK: {
-                        DrawTextureRec(stickTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
-                        break;
-                    }
-                    case ITEM_APPLE: {
-                        DrawTextureRec(appleTx, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(mapItems[i].position), WHITE);
-                        break;
-                    }
-					default: {
-						printf("Idk\n");
-						break;
-					}
-					}
-				}
-
-                render_entity(&cyhar);
-                render_entity(&fantano);
-                render_entity(&zor);
+                EndMode2D();
             }
-            EndMode2D();
+            EndDrawing();
         }
-        EndDrawing();
     }
 
     UnloadTexture(stickTx);
