@@ -63,12 +63,12 @@ void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool c
     }
 
     if (!isUnblocked(map, src) || !isUnblocked(map, dest)) {
-        printf("Source or destination is blocked\n");
+        //printf("Source or destination is blocked\n");
         return;
     }
 
     if (isDestination(src, dest)) {
-        printf("Source is the destination\n");
+        //printf("Source is the destination\n");
         return;
     }
 
