@@ -978,9 +978,27 @@ int main(void/*int argc, char* argv[]*/) {
                         }
                     }
 
-                    render_entity(cyhar);
-                    render_entity(fantano);
-                    render_entity(zor);
+                    bool rendered[MAX_INSTANCES] = { false };
+                    for (int i = 0; i < entity_data.entity_counter; i++) {
+						int lowest_y = 99999;
+                        int index_to_render = -1;
+
+                        for (int e = 0; e < entity_data.entity_counter; e++) {
+                            Entity* ent = &entity_data.entities[e];
+                            //int x_pos = ent->position.x * TILE_SIZE/* + (TILE_SIZE / 2)*/; // debug
+                            int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
+                            //DrawRectangle(x_pos, y_pos, 50, 50, RED);
+                            if (!rendered[e] && y_pos < lowest_y) {
+                                lowest_y = y_pos;
+                                index_to_render = e;
+                            }
+                        }
+
+                        if (index_to_render != -1) {
+                            render_entity(&entity_data.entities[index_to_render]);
+							rendered[index_to_render] = true;
+                        }         
+                    }
                 }
                 EndMode2D();
             }
