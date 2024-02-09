@@ -399,7 +399,7 @@ void update_zor_animation(Entity* zor) {
     case ATTACK_MELEE: {
         zor->animation.max_frame_time = 0.017f;
         zor->animation.y_offset = 2048 + 2048;
-        if (zor->animation.cur_frame == zor->animation.n_frames) {
+        if (zor->animation.cur_frame == zor->animation.n_frames - 1) {
             zor->animation_state = IDLE;
         }
         break;
