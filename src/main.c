@@ -50,6 +50,8 @@ const int worldWidth = 32 * 14;
 
 // #define NPC_MAX_INVENTORY_SIZE 4
 
+// todo: rotation animation
+// timed rotations
 enum Direction {
     DOWN,
     DOWNRIGHT,
@@ -60,6 +62,20 @@ enum Direction {
     LEFT,
     DOWNLEFT
 };
+
+void rotate_smooth(enum Direction target, enum Direction *dir) {
+    int diff = (target - *dir + 8) % 8; // Calculate the shortest difference in direction
+
+    if (diff == 0)
+        return; // If the target is the same as the current direction, no rotation needed
+
+    int steps = (diff <= 4) ? diff : 8 - diff; // Choose the smaller rotation direction
+
+    for (int i = 0; i < steps; i++) {
+        *dir = (*dir + 1) % 8; // Rotate one step clockwise
+        // You can add code here to visualize or animate the rotation
+    }
+}
 
 enum AnimationState {
     IDLE,
