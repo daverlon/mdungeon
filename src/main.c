@@ -689,7 +689,7 @@ int main(void/*int argc, char* argv[]*/) {
 				.n_frames = 20
 		}
 	});
-	zor = &entity_data.entities[entity_data.entity_counter - 1];
+    zor = GET_LAST_ENTITY_REF();
 
 	create_entity_instance(&entity_data, (Entity) {
 		.texture = LOAD_FANTANO_TEXTURE(),
@@ -698,7 +698,7 @@ int main(void/*int argc, char* argv[]*/) {
 				.n_frames = 20
 		}
 	});
-	fantano = &entity_data.entities[entity_data.entity_counter - 1];
+	fantano = GET_LAST_ENTITY_REF();
 
 	create_entity_instance(&entity_data, (Entity) {
 		.texture = LOAD_CYHAR_TEXTURE(),
@@ -707,7 +707,7 @@ int main(void/*int argc, char* argv[]*/) {
 				.n_frames = 20
 		}
 	});
-	cyhar = &entity_data.entities[entity_data.entity_counter - 1];
+	cyhar = GET_LAST_ENTITY_REF();
 
     ItemData item_data = (ItemData){.items = { 0 }, .item_counter = 0};
     nullify_all_items(&item_data);
