@@ -32,7 +32,7 @@ const int world_width = 32 * 14;
 #define TILE_SIZE 100
 // #define TILE_SIZE 256
 
-#define GRID_MOVESPEED 3.8f
+#define GRID_MOVESPEED 4.0f
 #define POSITION_THRESHOLD 0.05f
 
 #define LOAD_ZOR_TEXTURE() (LoadTexture("res/zor/zor_spritesheet.png"))
@@ -327,25 +327,25 @@ void update_animation(Animation* anim) {
     anim->cur_frame_time += GetFrameTime();
 
     // calculate the number of frames to advance based on elapsed time
-    int frames_to_advance = (int)(anim->cur_frame_time / anim->max_frame_time);
-    anim->cur_frame_time -= frames_to_advance * anim->max_frame_time;
+	int frames_to_advance = (int)(anim->cur_frame_time / anim->max_frame_time);
+	anim->cur_frame_time -= frames_to_advance * anim->max_frame_time;
 
 
-    anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
+	anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
 
-    if (anim->cur_frame % anim->n_frames == 0) {
-        anim->cur_frame = 0;
-    }
-    //float elapsed_time = GetFrameTime();
-    //int frames_to_advance = (int)(elapsed_time / anim->max_frame_time);
+	if (anim->cur_frame % anim->n_frames == 0) {
+		anim->cur_frame = 0;
+	}
+	//float elapsed_time = GetFrameTime();
+	//int frames_to_advance = (int)(elapsed_time / anim->max_frame_time);
 
-    //// Advance the frame by the calculated amount
-    //anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
+	//// Advance the frame by the calculated amount
+	//anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
 }
 
 Vector2 position_to_grid_position(Vector2 pos) {
     Vector2 gridPos = Vector2Multiply(pos, (Vector2) { TILE_SIZE, TILE_SIZE });
-    
+
     // Center the entity within the grid cell
     gridPos.x += (TILE_SIZE - SPRITE_SIZE) / 2;
     gridPos.y += (TILE_SIZE - SPRITE_SIZE) / 2;
@@ -363,7 +363,7 @@ void render_entity(Entity* en) {
     DrawCircle(
         grid_position.x + (SPRITE_SIZE / 2.0f),
         grid_position.y + (SPRITE_SIZE / 2.0f) + (SPRITE_SIZE / 4.0f),
-        35.0f, 
+        35.0f,
         BLACK_SEMI_TRANSPARENT
     );
     // DrawRectangleLines(
@@ -371,14 +371,14 @@ void render_entity(Entity* en) {
     DrawTextureRec(
         en->texture,
         (Rectangle) {
-            en->animation.cur_frame * SPRITE_SIZE, 
-            en->animation.y_offset + (en->direction * SPRITE_SIZE), 
-            SPRITE_SIZE, 
+        en->animation.cur_frame* SPRITE_SIZE,
+            en->animation.y_offset + (en->direction * SPRITE_SIZE),
+            SPRITE_SIZE,
             SPRITE_SIZE
-        },
+    },
         grid_position,
-        WHITE
-    );
+            WHITE
+            );
 }
 
 void update_zor_animation(Entity* zor) {
@@ -386,12 +386,12 @@ void update_zor_animation(Entity* zor) {
     // higher fps seems to speed this up
     switch (zor->animation_state) {
     case IDLE: {
-        zor->animation.max_frame_time = 0.01f;
+        zor->animation.max_frame_time = 0.02f;
         zor->animation.y_offset = 0;
         break;
     }
     case MOVE: {
-        zor->animation.max_frame_time = 0.025f;
+        zor->animation.max_frame_time = 0.030f;
         // zor->animation.yOffset = 2048.0f;
         zor->animation.y_offset = 2048;
         break;
@@ -410,7 +410,6 @@ void update_zor_animation(Entity* zor) {
         break;
     }
     }
-
     update_animation(&zor->animation);
 }
 
@@ -424,7 +423,17 @@ bool item_exists_on_tile(int col, int row, const ItemData* item_data) {
     return false;
 }
 
-Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* item_data) {
+bool entity_exists_on_tile(int col, int row, const EntityData* entity_data) {
+    Vector2 pos = (Vector2){ col, row };
+    for (int i = 0; i < entity_data->entity_counter; i++) {
+        if (Vector2Equals(entity_data->entities[i].position, pos)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* item_data, const EntityData* entity_data) {
     int col = -1;
     int row = -1;
 
@@ -439,6 +448,9 @@ Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* it
 
         // check if item exists on tile
         if (item_exists_on_tile(col, row, item_data))
+            continue;
+
+        if (entity_exists_on_tile(col, row, entity_data))
             continue;
 
         // todo:
@@ -654,6 +666,8 @@ int main(void/*int argc, char* argv[]*/) {
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     //SetTargetFPS(144);
 
+    SetRandomSeed(1337);
+
     Camera2D camera = { 0 };
     {
         camera.offset = (Vector2){ window_width / 2, window_height / 2 };
@@ -754,9 +768,9 @@ int main(void/*int argc, char* argv[]*/) {
                 );
                 zor->is_moving = false;
                 zor->animation_state = IDLE;
-                zor->position = find_random_empty_floor_tile(&map_data, &item_data);
-                fantano->position = find_random_empty_floor_tile(&map_data, &item_data);
-                cyhar->position = find_random_empty_floor_tile(&map_data, &item_data);
+                zor->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
+                fantano->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
+                cyhar->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
                 printf("Init basic dungeon.\n");
                 gsi.init = true;
             }
@@ -793,13 +807,16 @@ int main(void/*int argc, char* argv[]*/) {
         }
 
         update_zor_animation(zor);
+        update_animation(&fantano->animation);
+        update_animation(&cyhar->animation);
+
 
         Vector2 cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
         cam_target.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
         cam_target.y += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 4);
         camera.target = cam_target;
 
-        scan_items_for_pickup(&item_data, &zor);
+        scan_items_for_pickup(&item_data, zor);
 
         // render
         {
