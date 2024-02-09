@@ -29,10 +29,10 @@ const int world_width = 32 * 14;
 #define SPRITE_SIZE 256.0f
 
 // #define TILE_SIZE 128
-#define TILE_SIZE 160
+#define TILE_SIZE 100
 // #define TILE_SIZE 256
 
-#define GRID_MOVESPEED 3.0f
+#define GRID_MOVESPEED 3.8f
 #define POSITION_THRESHOLD 0.05f
 
 #define LOAD_ZOR_TEXTURE() (LoadTexture("res/zor/zor_spritesheet.png"))
@@ -47,6 +47,8 @@ const int world_width = 32 * 14;
 #define INVENTORY_SIZE 32
 
 #define DEFAULT_FRAME_COUNT 20
+
+#define GET_LAST_ENTITY_REF() (&entity_data.entities[entity_data.entity_counter-1])
 
 // #define NPC_MAX_INVENTORY_SIZE 4
 
@@ -126,6 +128,11 @@ typedef struct {
     int inventory_item_count;
 } Entity;
 
+typedef struct {
+    Entity entities[MAX_INSTANCES];
+    int entity_counter;
+} EntityData;
+
 // turn queue (queue size should be limited to max entities per turn)
 typedef struct {
     Entity entity;
@@ -143,6 +150,11 @@ typedef struct {
 // ideas:   BasicItem (items with consistent effects)
 //          SpecialItem (items that may change? this seems weird..)
 //          ItemWear (wear value for each item (such that they are disposable? probably not fun)) 
+
+typedef struct {
+    Item items[MAX_INSTANCES];
+    int item_counter;
+} ItemData;
 
 Vector2 direction_to_vector2(enum Direction direction) {
     switch (direction) {
@@ -280,29 +292,22 @@ void move_entity(Entity* en) {
 
     const Vector2 movement = direction_to_vector2(en->direction);
 
-    // Calculate the maximum allowed movement distance for this frame based on the frame time
-    float maxMoveDistance = GetFrameTime() * GRID_MOVESPEED;
+    float max_move_distance = GetFrameTime() * GRID_MOVESPEED;
 
-    // Calculate the distance to the target position
-    float distanceToTarget = Vector2Distance(en->position, en->target_position);
+    float distance_to_target = Vector2Distance(en->position, en->target_position);
 
-    // If the maximum move distance exceeds the distance to the target position,
-    // adjust the maxMoveDistance to ensure the character doesn't overshoot
-    if (maxMoveDistance > distanceToTarget) {
-        maxMoveDistance = distanceToTarget;
+    if (max_move_distance > distance_to_target) {
+        max_move_distance = distance_to_target;
     }
 
-    // Check if the remaining distance to the target is smaller than the movement distance
-    if (maxMoveDistance >= distanceToTarget) {
-        // Snap directly to the target position
+    if (max_move_distance >= distance_to_target) {
         en->position = en->target_position;
         en->is_moving = false;
         en->animation_state = IDLE;
     }
     else {
-        // Apply movement
-        en->position.x += movement.x * maxMoveDistance;
-        en->position.y += movement.y * maxMoveDistance;
+        en->position.x += movement.x * max_move_distance;
+        en->position.y += movement.y * max_move_distance;
     }
 }
 
@@ -325,13 +330,17 @@ void update_animation(Animation* anim) {
     int frames_to_advance = (int)(anim->cur_frame_time / anim->max_frame_time);
     anim->cur_frame_time -= frames_to_advance * anim->max_frame_time;
 
-    // advance the frame by the calculated amount
 
-    //anim->curFrame = (anim->curFrame + framesToAdvance) % anim->nFrames;
-    anim->cur_frame = (anim->cur_frame + frames_to_advance);
-    if (anim->cur_frame % anim->n_frames + 1 == 0) {
+    anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
+
+    if (anim->cur_frame % anim->n_frames == 0) {
         anim->cur_frame = 0;
     }
+    //float elapsed_time = GetFrameTime();
+    //int frames_to_advance = (int)(elapsed_time / anim->max_frame_time);
+
+    //// Advance the frame by the calculated amount
+    //anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
 }
 
 Vector2 position_to_grid_position(Vector2 pos) {
@@ -352,8 +361,8 @@ void render_entity(Entity* en) {
 
     // offset y
     DrawCircle(
-        grid_position.x + (SPRITE_SIZE / 2),
-        grid_position.y + (SPRITE_SIZE / 2) + (SPRITE_SIZE / 4),
+        grid_position.x + (SPRITE_SIZE / 2.0f),
+        grid_position.y + (SPRITE_SIZE / 2.0f) + (SPRITE_SIZE / 4.0f),
         35.0f, 
         BLACK_SEMI_TRANSPARENT
     );
@@ -370,13 +379,6 @@ void render_entity(Entity* en) {
         grid_position,
         WHITE
     );
-}
-
-Entity create_zor_entity_instance(Vector2 pos) {
-    Entity en = { 0 };
-    en.position = pos;
-    en.animation.n_frames = 20;
-    return en;
 }
 
 void update_zor_animation(Entity* zor) {
@@ -412,19 +414,44 @@ void update_zor_animation(Entity* zor) {
     update_animation(&zor->animation);
 }
 
-Vector2 find_random_empty_floor_tile(const MapData* map_data) {
-    int col = GetRandomValue(0, MAX_COLS);
-    int row = GetRandomValue(0, MAX_ROWS);
-    while (map_data->tiles[col][row] != TILE_FLOOR) {
-        col = GetRandomValue(0, MAX_COLS);
-        row = GetRandomValue(0, MAX_ROWS);
+bool item_exists_on_tile(int col, int row, const ItemData* item_data) {
+    Vector2 pos = (Vector2){ col, row };
+    for (int i = 0; i < item_data->item_counter; i++) {
+        if (Vector2Equals(item_data->items[i].position, pos)) {
+            return true;
+        }
     }
-    return (Vector2) { col, row };
+    return false;
 }
 
-void create_item_instance(Item item, int* counter, Item* items) {
+Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* item_data) {
+    int col = -1;
+    int row = -1;
+
+    while (1) {
+        // choose tile
+		col = GetRandomValue(0, MAX_COLS);
+		row = GetRandomValue(0, MAX_ROWS);
+
+        // check if tile is TILE_FLOOR
+        if (map_data->tiles[col][row] != TILE_FLOOR) 
+            continue;
+
+        // check if item exists on tile
+        if (item_exists_on_tile(col, row, item_data))
+            continue;
+
+        // todo:
+        // check if entity exists on tile
+
+        break;
+	}
+	return (Vector2) { col, row };
+}
+
+void create_item_instance(Item item, ItemData* item_data) {
     //printf("Lol: %i\n", *counter);
-    if ((*counter) >= MAX_INSTANCES) {
+    if (item_data->item_counter >= MAX_INSTANCES) {
         printf("Cannot spawn item. Maximum items reached.\n");
         return;
     }
@@ -432,25 +459,26 @@ void create_item_instance(Item item, int* counter, Item* items) {
         printf("Error: Tried to create ITEM_NOTHING.\n");
         return;
     }
-    items[*counter] = item;
-    (*counter)++;
+    item_data->items[item_data->item_counter] = item;
+    item_data->item_counter++;
+    printf("Created item. Counter: %i\n", item_data->item_counter);
 }
 
-void delete_item(const int index, int* counter, Item* items) {
-    if (index >= *counter) {
-        printf("Warning: Tried to delete item index: %i, instance counter: %i\n", index, *counter);
+void delete_item(const int index, ItemData* item_data) {
+    if (index >= item_data->item_counter) {
+        printf("Warning: Tried to delete item index: %i, instance counter: %i\n", index, item_data->item_counter);
         return;
     }
 
-    for (int i = index; i < *counter; i++) {
-        items[i] = items[i + 1];
+    for (int i = index; i < item_data->item_counter; i++) {
+        item_data->items[i] = item_data->items[i + 1];
     }
-    (*counter)--;
-    printf("Deleted item index: %i, %i instances left on map.\n", index, *counter);
+    item_data->item_counter--;
+    printf("Deleted item index: %i, %i instances left on map.\n", index, item_data->item_counter);
 }
 
-void spawn_items(enum ItemType item_type, int* map_item_counter, Item* map_items, const MapData* map_data, int min, int max) {
-    if (*map_item_counter >= MAX_INSTANCES || *map_item_counter + max >= MAX_INSTANCES) {
+void spawn_items(enum ItemType item_type, ItemData* item_data, const MapData* map_data, int min, int max) {
+    if (item_data->item_counter >= MAX_INSTANCES || item_data->item_counter + max >= MAX_INSTANCES) {
         printf("Error: [Spawn Items] mapItemCounter already at maximum instances.\n");
         return;
     }
@@ -467,7 +495,7 @@ void spawn_items(enum ItemType item_type, int* map_item_counter, Item* map_items
         bool position_taken = false;
         for (int i = 0; i < n_items; i++) {
             if (Vector2Equals(
-                map_items[i].position,
+                item_data->items[i].position,
                 (Vector2) {
                 col, row
             })) {
@@ -478,16 +506,16 @@ void spawn_items(enum ItemType item_type, int* map_item_counter, Item* map_items
         if (position_taken) continue;
         printf("Creating spilledcup at %i, %i\n", col, row);
         // found valid tile
-        create_item_instance((Item) { item_type, (Vector2) { col, row }, false }, & (*map_item_counter), map_items);
+        create_item_instance((Item) { item_type, (Vector2) { col, row }, false }, item_data);
         item_counter++;
     }
 }
 
-void nullify_all_items(int* counter, Item* items) {
+void nullify_all_items(ItemData* item_data) {
     for (int i = 0; i < MAX_INSTANCES; i++) {
-        items[i] = (Item){ ITEM_NOTHING, (Vector2) { 0, 0 }, true };
+        item_data->items[i] = (Item){ ITEM_NOTHING, (Vector2) { 0, 0 }, true };
     }
-    (*counter) = 0;
+    item_data->item_counter = 0;
     printf("Set every item to ITEM_NOTHING\n");
 }
 
@@ -498,22 +526,24 @@ void nullify_all_items(int* counter, Item* items) {
     // requires textures 
 // }
 
-void pickup_item(const int index, Item* map_items, Entity* entity) {
+void pickup_item(const int index, ItemData* item_data, Entity* entity) {
     // add item to entity inventory
     // this should be called with delete_item called after
+    // todo:
+    // check for out of bounds index (should never occur with good code)
     if (entity->inventory_item_count < INVENTORY_SIZE) {
-        entity->inventory[entity->inventory_item_count] = map_items[index].type;
+        entity->inventory[entity->inventory_item_count] = item_data->items[index].type;
         entity->inventory_item_count++;
     }
 }
 
-void scan_items_for_pickup(int* counter, Item* map_items, Entity* entity) {
-    for (int i = 0; i < *counter; i++) {
-        Item* item = &map_items[i];
+void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
+    for (int i = 0; i < item_data->item_counter; i++) {
+        Item* item = &item_data->items[i];
         if (Vector2Equals(item->position, entity->position)) {
             if (!item->prevent_pickup) {
-                pickup_item(i, map_items, entity);
-                delete_item(i, counter, map_items);
+                pickup_item(i, item_data, entity);
+                delete_item(i, item_data);
                 printf("Entity item pickup.\n");
             }
         }
@@ -538,20 +568,20 @@ void delete_item_from_entity_inventory(const int index, Entity* entity) {
     printf("Deleted inventory item index: %i, %i items remaining.\n", index, entity->inventory_item_count);
 }
 
-void drop_item(const int index, Entity* entity, int* map_item_counter, Item* map_items) {
+void drop_item(const int index, Entity* entity, ItemData* item_data) {
     if (entity->is_moving) {
         printf("Tried to drop item while entity is moving.\n");
         return;
     }
     // check if item already exists at current position 
-    for (int i = 0; i < *map_item_counter; i++) {
-        if (Vector2Equals(entity->position, map_items[i].position)) {
+    for (int i = 0; i < item_data->item_counter; i++) {
+        if (Vector2Equals(entity->position, item_data->items[i].position)) {
             printf("Tried to drop item on top of existing item.\n");
             return;
         }
     }
-    map_items[*map_item_counter] = (Item){ entity->inventory[index], entity->position, true };
-    (*map_item_counter)++;
+    item_data->items[item_data->item_counter] = (Item){ entity->inventory[index], entity->position, true };
+    item_data->item_counter++;
     delete_item_from_entity_inventory(index, entity);
 }
 
@@ -593,6 +623,25 @@ void set_gamestate(GameStateInfo *gsi, enum GameState state) {
     gsi->init = false;
 }
 
+void create_entity_instance(EntityData* entity_data, Entity ent) {
+    entity_data->entities[entity_data->entity_counter] = ent;
+    printf("Created entity at index %i.", entity_data->entity_counter);
+    entity_data->entity_counter++;
+    printf(" Instance counter is now %i\n", entity_data->entity_counter);
+}
+
+void remove_entity(const int index, EntityData* entity_data) {
+    if (index >= entity_data->entity_counter) {
+        printf("Warning: Tried to delete entity index %i, instance counter: %i\n", index, entity_data->entity_counter);
+        return;
+    }
+    for (int i = 0; i < entity_data->entity_counter; i++) {
+        entity_data->entities[i] = entity_data->entities[i + 1];
+    }
+    entity_data->entity_counter--;
+    printf("Deleted entity index %i, %i instances left on map.\n", index, entity_data->entity_counter);
+}
+
 int main(void/*int argc, char* argv[]*/) {
 
     GameStateInfo gsi = { GS_INTRO_DUNGEON, false };
@@ -613,27 +662,41 @@ int main(void/*int argc, char* argv[]*/) {
         camera.zoom = 1.0f;
     }
 
-    Entity fantano = { 0 };
-    {
-        fantano.texture = LOAD_FANTANO_TEXTURE();
-        fantano.position = (Vector2){ 5.0f, 5.0f };
-        fantano.animation.max_frame_time = 0.017f;
-        fantano.animation.n_frames = 20;
-    }
+    EntityData entity_data = (EntityData){ 0 };
+    Entity* zor = { 0 };
+    Entity* fantano = { 0 };
+    Entity* cyhar = { 0 };
 
-    Entity cyhar = { 0 };
-    {
-        cyhar.texture = LOAD_CYHAR_TEXTURE();
-        cyhar.position = (Vector2){ 1.0f, 0.0f };
-        cyhar.animation.n_frames = 20;
-    }
+    // init the entities
+	create_entity_instance(&entity_data, (Entity) {
+		.texture = LOAD_ZOR_TEXTURE(),
+			.animation = (Animation){
+				.max_frame_time = 0.023,
+				.n_frames = 20
+		}
+	});
+	zor = &entity_data.entities[entity_data.entity_counter - 1];
 
-    Entity zor = create_zor_entity_instance((Vector2) { 7.0f, 7.0f });
-    zor.texture = LOAD_ZOR_TEXTURE();
+	create_entity_instance(&entity_data, (Entity) {
+		.texture = LOAD_FANTANO_TEXTURE(),
+			.animation = (Animation){
+				.max_frame_time = 0.017,
+				.n_frames = 20
+		}
+	});
+	fantano = &entity_data.entities[entity_data.entity_counter - 1];
 
-    Item map_items[MAX_INSTANCES];
-    int map_item_counter = 0;
-    nullify_all_items(&map_item_counter, map_items);
+	create_entity_instance(&entity_data, (Entity) {
+		.texture = LOAD_CYHAR_TEXTURE(),
+			.animation = (Animation){
+				.max_frame_time = 0.017,
+				.n_frames = 20
+		}
+	});
+	cyhar = &entity_data.entities[entity_data.entity_counter - 1];
+
+    ItemData item_data = (ItemData){.items = { 0 }, .item_counter = 0};
+    nullify_all_items(&item_data);
 
     // todo: large texture containing multiple item sprites?
     Texture2D texture_item_spilledcup = LOAD_SPILLEDCUP_TEXTURE();
@@ -656,7 +719,7 @@ int main(void/*int argc, char* argv[]*/) {
         if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
             camera.offset = Vector2Add(camera.offset, GetMouseDelta());
         }
-        int scroll = GetMouseWheelMove();
+        float scroll = GetMouseWheelMove();
         if (scroll != 0.0f) {
             camera.zoom += scroll * 0.1f;
             if (camera.zoom <= 0.1f) camera.zoom = 0.1f;
@@ -669,33 +732,31 @@ int main(void/*int argc, char* argv[]*/) {
             // init intro dungeon
             if (!gsi.init) {
                 // init intro dungeon
-                nullify_all_items(&map_item_counter, map_items);
+                nullify_all_items(&item_data);
                 map_data = generate_map(DUNGEON_PRESET_BASIC);
                 spawn_items(
                     ITEM_SPILLEDCUP,
-                    &map_item_counter,
-                    map_items,
+                    &item_data,
                     &map_data,
                     1, 3
                 );
                 spawn_items(
                     ITEM_STICK,
-                    &map_item_counter,
-                    map_items,
+                    &item_data,
                     &map_data,
                     4, 8
                 );
                 spawn_items(
                     ITEM_APPLE,
-                    &map_item_counter,
-                    map_items,
+                    &item_data,
                     &map_data,
                     2, 5
                 );
-                zor.is_moving = false;
-                zor.animation_state = IDLE;
-                zor.position = find_random_empty_floor_tile(&map_data);
-                fantano.position = find_random_empty_floor_tile(&map_data);
+                zor->is_moving = false;
+                zor->animation_state = IDLE;
+                zor->position = find_random_empty_floor_tile(&map_data, &item_data);
+                fantano->position = find_random_empty_floor_tile(&map_data, &item_data);
+                cyhar->position = find_random_empty_floor_tile(&map_data, &item_data);
                 printf("Init basic dungeon.\n");
                 gsi.init = true;
             }
@@ -706,7 +767,7 @@ int main(void/*int argc, char* argv[]*/) {
         }
         case GS_ADVANCED_DUNGEON: {
             if (!gsi.init) {
-                nullify_all_items(&map_item_counter, map_items);
+                nullify_all_items(&item_data);
                 map_data = generate_map(DUNGEON_PRESET_ADVANCED);
                 printf("Init advanced dungeon.\n");
                 gsi.init = true;
@@ -723,41 +784,35 @@ int main(void/*int argc, char* argv[]*/) {
             break;
         }
         }
-        control_entity(&zor, map_data.tiles);
-        move_entity(&zor); // perhaps move_entities (once there is ai)
+        control_entity(zor, map_data.tiles);
+        move_entity(zor); // perhaps move_entities (once there is ai)
         // move_entity_freely(playerEntity);
 
-        if (IsKeyPressed(KEY_E) && zor.inventory_item_count > 0) {
-            drop_item(zor.inventory_item_count - 1, &zor, &map_item_counter, map_items);
+        if (IsKeyPressed(KEY_E) && zor->inventory_item_count > 0) {
+            drop_item(zor->inventory_item_count - 1, zor, &item_data);
         }
 
-        update_animation(&fantano.animation);
-        update_animation(&cyhar.animation);
-        update_zor_animation(&zor);
+        update_zor_animation(zor);
 
-        Vector2 camTarget = Vector2Multiply(zor.position, (Vector2) { TILE_SIZE, TILE_SIZE });
-        camTarget.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
-        camTarget.y += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 4);
-        camera.target = camTarget;
+        Vector2 cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+        cam_target.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
+        cam_target.y += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 4);
+        camera.target = cam_target;
 
-        scan_items_for_pickup(&map_item_counter, map_items, &zor);
+        scan_items_for_pickup(&item_data, &zor);
 
         // render
         {
-            render_player_inventory(&zor);
+            render_player_inventory(zor);
 
-            PathList pathList = { .path = NULL, .length = 0 };
+            PathList pathList = { .path = { 0 }, .length = 0 };
             aStarSearch(
                 &map_data,
-                (Point) {
-                (int)zor.position.x, (int)zor.position.y
-            },
-                (Point) {
-                (int)fantano.position.x, (int)fantano.position.y
-            },
-                    & pathList,
-                    false
-                    );
+                (Point) {(int)zor->position.x, (int)zor->position.y},
+                (Point) {(int)fantano->position.x, (int)fantano->position.y },
+				& pathList,
+				false
+			);
 
             // do rendering
             BeginDrawing();
@@ -859,22 +914,22 @@ int main(void/*int argc, char* argv[]*/) {
                     }
 
                     // render items
-                    for (int i = 0; i < map_item_counter; i++) {
-                        switch (map_items[i].type) {
+                    for (int i = 0; i < item_data.item_counter; i++) {
+                        switch (item_data.items[i].type) {
                         case ITEM_NOTHING: {
                             printf("Error: Tried to render ITEM_NOTHING.");
                             break;
                         }
                         case ITEM_SPILLEDCUP: {
-                            DrawTextureRec(texture_item_spilledcup, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(map_items[i].position), WHITE);
+                            DrawTextureRec(texture_item_spilledcup, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
                             break;
                         }
                         case ITEM_STICK: {
-                            DrawTextureRec(texture_item_stick, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(map_items[i].position), WHITE);
+                            DrawTextureRec(texture_item_stick, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
                             break;
                         }
                         case ITEM_APPLE: {
-                            DrawTextureRec(texture_item_apple, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(map_items[i].position), WHITE);
+                            DrawTextureRec(texture_item_apple, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
                             break;
                         }
                         default: {
@@ -884,9 +939,9 @@ int main(void/*int argc, char* argv[]*/) {
                         }
                     }
 
-                    render_entity(&cyhar);
-                    render_entity(&fantano);
-                    render_entity(&zor);
+                    render_entity(cyhar);
+                    render_entity(fantano);
+                    render_entity(zor);
                 }
                 EndMode2D();
             }
@@ -905,9 +960,9 @@ int main(void/*int argc, char* argv[]*/) {
     }
     // delete entity textures
     {
-	    UnloadTexture(zor.texture);
-		UnloadTexture(cyhar.texture);
-		UnloadTexture(fantano.texture);
+        for (int i = 0; i < entity_data.entity_counter; i++) {
+            UnloadTexture(entity_data.entities[i].texture);
+        }
 	}
     
     CloseWindow();
