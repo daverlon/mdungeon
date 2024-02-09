@@ -126,6 +126,7 @@ typedef struct {
     Vector2 target_position;
     enum ItemType inventory[32];
     int inventory_item_count;
+    bool prevent_pickup;
 } Entity;
 
 typedef struct {
@@ -145,7 +146,7 @@ typedef struct {
     Vector2 position; // grid coordinate position
     // for player to ignore item once dropped
     // enemies should still be able to pickup the item (perhaps some won't want to though)
-    bool prevent_pickup;  // default 0: (0=can pickup)
+    //bool prevent_pickup;  // default 0: (0=can pickup) (moved to entity)
 } Item;
 // ideas:   BasicItem (items with consistent effects)
 //          SpecialItem (items that may change? this seems weird..)
@@ -518,14 +519,14 @@ void spawn_items(enum ItemType item_type, ItemData* item_data, const MapData* ma
         if (position_taken) continue;
         printf("Creating spilledcup at %i, %i\n", col, row);
         // found valid tile
-        create_item_instance((Item) { item_type, (Vector2) { col, row }, false }, item_data);
+        create_item_instance((Item) { item_type, (Vector2) { col, row } }, item_data);
         item_counter++;
     }
 }
 
 void nullify_all_items(ItemData* item_data) {
     for (int i = 0; i < MAX_INSTANCES; i++) {
-        item_data->items[i] = (Item){ ITEM_NOTHING, (Vector2) { 0, 0 }, true };
+        item_data->items[i] = (Item){ ITEM_NOTHING, (Vector2) { 0, 0 }};
     }
     item_data->item_counter = 0;
     printf("Set every item to ITEM_NOTHING\n");
@@ -547,24 +548,43 @@ void pickup_item(const int index, ItemData* item_data, Entity* entity) {
         entity->inventory[entity->inventory_item_count] = item_data->items[index].type;
         entity->inventory_item_count++;
     }
+    delete_item(index, item_data);
+    // else: "inventory full"?
 }
 
 void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
-    for (int i = 0; i < item_data->item_counter; i++) {
+    /*for (int i = 0; i < item_data->item_counter; i++) {
         Item* item = &item_data->items[i];
         if (Vector2Equals(item->position, entity->position)) {
-            if (!item->prevent_pickup) {
+            if (!entity->prevent_pickup) {
                 pickup_item(i, item_data, entity);
                 delete_item(i, item_data);
                 printf("Entity item pickup.\n");
             }
         }
         else {
-            if (item->prevent_pickup) {
-                item->prevent_pickup = false;
+            if (entity->prevent_pickup) {
+                entity->prevent_pickup = false;
             }
         }
-    }
+    }*/
+    
+    if (!entity->prevent_pickup) {
+		// entity can pickup item
+        for (int i = 0; i < item_data->item_counter; i++) {
+            Item* item = &item_data->items[i];
+            // item exists on same tile as entity
+            if (Vector2Equals(item->position, entity->position)) {
+                pickup_item(i, item_data, entity);
+            }
+        }
+	}
+	else {
+        Vector2 pos = entity->position;
+        if (!item_exists_on_tile(pos.x, pos.y, item_data)) {
+            entity->prevent_pickup = false;
+        }
+	}
 }
 
 void delete_item_from_entity_inventory(const int index, Entity* entity) {
@@ -592,9 +612,10 @@ void drop_item(const int index, Entity* entity, ItemData* item_data) {
             return;
         }
     }
-    item_data->items[item_data->item_counter] = (Item){ entity->inventory[index], entity->position, true };
+    item_data->items[item_data->item_counter] = (Item){ entity->inventory[index], entity->position };
     item_data->item_counter++;
     delete_item_from_entity_inventory(index, entity);
+    entity->prevent_pickup = true;
 }
 
 void render_player_inventory(Entity* player) {
@@ -817,6 +838,7 @@ int main(void/*int argc, char* argv[]*/) {
         camera.target = cam_target;
 
         scan_items_for_pickup(&item_data, zor);
+        scan_items_for_pickup(&item_data, fantano);
 
         // render
         {
