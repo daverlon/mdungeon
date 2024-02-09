@@ -26,6 +26,7 @@ typedef struct {
 } Node;
 
 typedef struct {
+    //Point path[MAX_NODES];
     Point* path;
     int length;
 } PathList;
