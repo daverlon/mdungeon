@@ -58,6 +58,9 @@ bool isInPathList(PathList* pathList, Point p) {
     return false;
 }
 
+// todo:
+// rewrite in snake_case
+
 void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners) {
     if (!isValid(src, map->cols, map->rows) || !isValid(dest, map->cols, map->rows)) {
         printf("Invalid source or destination\n");
