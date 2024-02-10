@@ -45,6 +45,7 @@ const int world_width = 32 * 14;
 #define LOAD_APPLE_TEXTURE() (LoadTexture("res/items/item_apple.png"))
 
 #define LOAD_FOREST_GRASS_TILES_TEXTURE() (LoadTexture("res/environment/forest_grass_tiles.png"))
+#define LOAD_FOREST_DIRT_TILES_TEXTURE() (LoadTexture("res/environment/forest_dirt_tiles.png"))
 #define LOAD_DESERT_TILES_TEXTURE() (LoadTexture("res/environment/desert_tiles.png"))
 // todo: each dungeon tileset should have 9 tiles?
 Vector2 index_to_position(int index) {
@@ -748,8 +749,6 @@ int main(void/*int argc, char* argv[]*/) {
     Texture2D texture_item_stick = LOAD_STICK_TEXTURE();
     Texture2D texture_item_apple = LOAD_APPLE_TEXTURE();
     
-    Texture2D texture_dungeon_floor_tilemap = { 0 }; // texture of the tilemap
-    //Texture2D texture_dungeon_floor_tiles = { 0 }; // actual texture of the dungeon floor
     RenderTexture2D texture_dungeon_floor_tiles = { 0 };
 
     MapData map_data = { 0 };
@@ -780,8 +779,7 @@ int main(void/*int argc, char* argv[]*/) {
         case GS_INTRO_DUNGEON: {
             if (!gsi.init) {
                 // reset tilemap texture 
-                UnloadTexture(texture_dungeon_floor_tilemap);
-                texture_dungeon_floor_tilemap = LOAD_DESERT_TILES_TEXTURE();
+                Texture2D texture_dungeon_floor_tilemap = LOAD_DESERT_TILES_TEXTURE();
 
                 // reset dungeon floor texture
                 UnloadRenderTexture(texture_dungeon_floor_tiles);
@@ -816,6 +814,8 @@ int main(void/*int argc, char* argv[]*/) {
                         }
                     }
                 }
+
+                UnloadTexture(texture_dungeon_floor_tilemap);
                 // generate floor
 
                 nullify_all_items(&item_data);
@@ -852,8 +852,9 @@ int main(void/*int argc, char* argv[]*/) {
         }
         case GS_ADVANCED_DUNGEON: {
             if (!gsi.init) {
-                UnloadTexture(texture_dungeon_floor_tilemap);
-                texture_dungeon_floor_tilemap = LOAD_FOREST_GRASS_TILES_TEXTURE();
+                Texture2D texture_grass = LOAD_FOREST_GRASS_TILES_TEXTURE();
+                Texture2D texture_dirt = LOAD_FOREST_DIRT_TILES_TEXTURE();
+                int tile_index = 0;
 
                 // reset dungeon floor texture
                 UnloadRenderTexture(texture_dungeon_floor_tiles);
@@ -862,30 +863,43 @@ int main(void/*int argc, char* argv[]*/) {
                 texture_dungeon_floor_tiles = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
 
                 //for (int row = 0; row < map_data.rows; row++) {
+				BeginTextureMode(texture_dungeon_floor_tiles);
 				for (int row = 0; row < map_data.rows; row++) {
 					for (int col = 0; col < map_data.cols; col++) {
                         switch (map_data.tiles[col][row]) {
                         case TILE_FLOOR:
                         case TILE_CORRIDOR:
                         case TILE_ROOM_ENTRANCE: {
-                            int tile_index = GetRandomValue(0, 8);
+                            tile_index = GetRandomValue(0, 8);
                             Vector2 tile_tx_rect_pos = index_to_position(tile_index);
-                            BeginTextureMode(texture_dungeon_floor_tiles);
                             DrawTextureRec(
-                                texture_dungeon_floor_tilemap,
+                                texture_grass,
+                                (Rectangle) {
+                                tile_tx_rect_pos.x, tile_tx_rect_pos.y, TILE_SIZE, TILE_SIZE},
+                                (Vector2) {col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)}, WHITE);
+                            break;
+                        }
+                        case TILE_WALL:
+                            tile_index = GetRandomValue(0, 8);
+                            Vector2 tile_tx_rect_pos = index_to_position(tile_index);
+                            DrawTextureRec(
+                                texture_dirt,
                                 (Rectangle) {
                                 tile_tx_rect_pos.x, tile_tx_rect_pos.y, TILE_SIZE, TILE_SIZE
                             },
-                                (Vector2) {col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)}, WHITE);
-                            EndTextureMode();
+                                (Vector2) {
+                                col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)
+                            }, WHITE);
                             break;
-                        }
                         default: {
                             break;
                         }
                         }
                     }
                 }
+				EndTextureMode();
+                UnloadTexture(texture_dirt);
+                UnloadTexture(texture_grass);
                 zor->is_moving = false;
                 zor->animation_state = IDLE;
                 zor->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
@@ -893,6 +907,24 @@ int main(void/*int argc, char* argv[]*/) {
                 cyhar->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
 
                 nullify_all_items(&item_data);
+                spawn_items(
+                    ITEM_SPILLEDCUP,
+                    &item_data,
+                    &map_data,
+                    4, 7
+                );
+                spawn_items(
+                    ITEM_STICK,
+                    &item_data,
+                    &map_data,
+                    5, 12
+                );
+                spawn_items(
+                    ITEM_APPLE,
+                    &item_data,
+                    &map_data,
+                    4, 7
+                );
                 printf("Init advanced dungeon.\n");
                 gsi.init = true;
             }
@@ -955,36 +987,36 @@ int main(void/*int argc, char* argv[]*/) {
 
                     for (int row = 0; row < map_data.rows; row++) {
                         for (int col = 0; col < map_data.cols; col++) {
-							Color clr = LIGHTGREEN;
+							//Color clr = LIGHTGREEN;
                             switch (map_data.tiles[col][row]) {
                              case TILE_WALL: {
                                 break;
                             }
                              case TILE_ROOM_ENTRANCE: {
-                                 DrawRectangle(
+                                 /*DrawRectangle(
                                      col * TILE_SIZE,
                                      row * TILE_SIZE,
                                      TILE_SIZE,
                                      TILE_SIZE,
-                                     LIGHTBLUE);
+                                     LIGHTBLUE);*/
                              }
                             case TILE_FLOOR: {
-                                clr = LIGHTBLUE;
-								DrawRectangle(
+                                //clr = LIGHTBLUE;
+								/*DrawRectangle(
 									col * TILE_SIZE,
 									row * TILE_SIZE,
 									TILE_SIZE,
 									TILE_SIZE,
-									LIGHTBLUE);
+									LIGHTBLUE);*/
                             }
 							case TILE_CORRIDOR: {
-                                clr = LIGHTYELLOW;
+                                /*clr = LIGHTYELLOW;
 								DrawRectangle(
 									col * TILE_SIZE,
 									row * TILE_SIZE,
 									TILE_SIZE,
 									TILE_SIZE,
-									LIGHTYELLOW);
+									LIGHTYELLOW);*/
 								if (IsKeyDown(KEY_SPACE)) {
 									DrawRectangleLines(
 										col * TILE_SIZE,
@@ -993,7 +1025,6 @@ int main(void/*int argc, char* argv[]*/) {
 										TILE_SIZE,
 										BLACK_SEMI_TRANSPARENT);
 								}
-
                                 break;
                             }
                             case TILE_INVALID: {
@@ -1005,14 +1036,14 @@ int main(void/*int argc, char* argv[]*/) {
                                 break;
                             }
 							}
-						    if (isInPathList(&pathList, (Point) { col, row })) {
+						    /*if (isInPathList(&pathList, (Point) { col, row })) {
 								DrawRectangle(
 								col * TILE_SIZE,
 								row * TILE_SIZE,
 								TILE_SIZE,
 								TILE_SIZE,
 								RED);
-							}
+							}*/
                         }
                     }
 ;
