@@ -781,28 +781,32 @@ int main(void/*int argc, char* argv[]*/) {
             if (!gsi.init) {
                 // reset tilemap texture 
                 UnloadTexture(texture_dungeon_floor_tilemap);
-                //texture_dungeon_floor_tilemap = LOAD_FOREST_GRASS_TILES_TEXTURE();
                 texture_dungeon_floor_tilemap = LOAD_DESERT_TILES_TEXTURE();
 
                 // reset dungeon floor texture
                 UnloadRenderTexture(texture_dungeon_floor_tiles);
-                texture_dungeon_floor_tiles = LoadRenderTexture(MAX_ROWS * TILE_SIZE, MAX_COLS * TILE_SIZE);
+
                 map_data = generate_map(DUNGEON_PRESET_BASIC);
+                texture_dungeon_floor_tiles = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
 
                 //for (int row = 0; row < map_data.rows; row++) {
-                for (int row = map_data.rows - 1; row >= 0; row--) {
+                for (int row = 0; row < map_data.rows; row++) {
                     for (int col = 0; col < map_data.cols; col++) {
                         switch (map_data.tiles[col][row]) {
                         case TILE_FLOOR:
                         case TILE_CORRIDOR:
                         case TILE_ROOM_ENTRANCE: {
                             int tile_index = GetRandomValue(0, 8);
-                            Vector2 tile_tx_rect_pos =  index_to_position(tile_index);
+                            Vector2 tile_tx_rect_pos = index_to_position(tile_index);
                             BeginTextureMode(texture_dungeon_floor_tiles);
                             DrawTextureRec(
                                 texture_dungeon_floor_tilemap,
-                                (Rectangle) {tile_tx_rect_pos.x, tile_tx_rect_pos.y, TILE_SIZE, TILE_SIZE},
-                                (Vector2) {col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)}, WHITE);
+                                (Rectangle) {
+                                tile_tx_rect_pos.x, tile_tx_rect_pos.y, TILE_SIZE, TILE_SIZE
+                            },
+                                (Vector2) {
+                                col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)
+                            }, WHITE);
                             EndTextureMode();
                             break;
                         }
@@ -849,14 +853,46 @@ int main(void/*int argc, char* argv[]*/) {
         case GS_ADVANCED_DUNGEON: {
             if (!gsi.init) {
                 UnloadTexture(texture_dungeon_floor_tilemap);
-                texture_dungeon_floor_tilemap = LOAD_DESERT_TILES_TEXTURE();
+                texture_dungeon_floor_tilemap = LOAD_FOREST_GRASS_TILES_TEXTURE();
 
-                //UnloadTexture(texture_dungeon_floor_tiles);
-
-                nullify_all_items(&item_data);
+                // reset dungeon floor texture
+                UnloadRenderTexture(texture_dungeon_floor_tiles);
 
                 map_data = generate_map(DUNGEON_PRESET_ADVANCED);
+                texture_dungeon_floor_tiles = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
 
+                //for (int row = 0; row < map_data.rows; row++) {
+				for (int row = 0; row < map_data.rows; row++) {
+					for (int col = 0; col < map_data.cols; col++) {
+                        switch (map_data.tiles[col][row]) {
+                        case TILE_FLOOR:
+                        case TILE_CORRIDOR:
+                        case TILE_ROOM_ENTRANCE: {
+                            int tile_index = GetRandomValue(0, 8);
+                            Vector2 tile_tx_rect_pos = index_to_position(tile_index);
+                            BeginTextureMode(texture_dungeon_floor_tiles);
+                            DrawTextureRec(
+                                texture_dungeon_floor_tilemap,
+                                (Rectangle) {
+                                tile_tx_rect_pos.x, tile_tx_rect_pos.y, TILE_SIZE, TILE_SIZE
+                            },
+                                (Vector2) {col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)}, WHITE);
+                            EndTextureMode();
+                            break;
+                        }
+                        default: {
+                            break;
+                        }
+                        }
+                    }
+                }
+                zor->is_moving = false;
+                zor->animation_state = IDLE;
+                zor->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
+                fantano->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
+                cyhar->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
+
+                nullify_all_items(&item_data);
                 printf("Init advanced dungeon.\n");
                 gsi.init = true;
             }
@@ -894,8 +930,6 @@ int main(void/*int argc, char* argv[]*/) {
 
         // render
         {
-            render_player_inventory(zor);
-
             PathList pathList = { .path = { 0 }, .length = 0 };
             aStarSearch(
                 &map_data,
@@ -908,7 +942,7 @@ int main(void/*int argc, char* argv[]*/) {
             // do rendering
             BeginDrawing();
             {
-                ClearBackground(BLACK);
+                ClearBackground(DARKBROWN);
                 DrawFPS(10, 5);
 
                 DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
@@ -917,41 +951,40 @@ int main(void/*int argc, char* argv[]*/) {
                 BeginMode2D(camera);
                 {
                     // render map
-					DrawTexture(texture_dungeon_floor_tiles.texture, 0, map_data.rows * -TILE_SIZE, WHITE);
+					DrawTexture(texture_dungeon_floor_tiles.texture, 0,/* map_data.cols * -TILE_SIZE*/0, WHITE);
 
                     for (int row = 0; row < map_data.rows; row++) {
                         for (int col = 0; col < map_data.cols; col++) {
-							//Color clr = LIGHTGREEN;
+							Color clr = LIGHTGREEN;
                             switch (map_data.tiles[col][row]) {
-                            case TILE_WALL: {
+                             case TILE_WALL: {
                                 break;
                             }
-                            case TILE_ROOM_ENTRANCE: {
-                                /*DrawRectangle(
-                                    col * TILE_SIZE,
-                                    row * TILE_SIZE,
-                                    TILE_SIZE,
-                                    TILE_SIZE,
-                                    LIGHTBLUE);*/
-                            }
+                             case TILE_ROOM_ENTRANCE: {
+                                 DrawRectangle(
+                                     col * TILE_SIZE,
+                                     row * TILE_SIZE,
+                                     TILE_SIZE,
+                                     TILE_SIZE,
+                                     LIGHTBLUE);
+                             }
                             case TILE_FLOOR: {
-                                /*clr = LIGHTBLUE;
+                                clr = LIGHTBLUE;
 								DrawRectangle(
 									col * TILE_SIZE,
 									row * TILE_SIZE,
 									TILE_SIZE,
 									TILE_SIZE,
-									LIGHTBLUE);*/
-
+									LIGHTBLUE);
                             }
 							case TILE_CORRIDOR: {
-                                /*clr = LIGHTYELLOW;
+                                clr = LIGHTYELLOW;
 								DrawRectangle(
 									col * TILE_SIZE,
 									row * TILE_SIZE,
 									TILE_SIZE,
 									TILE_SIZE,
-									LIGHTYELLOW);*/
+									LIGHTYELLOW);
 								if (IsKeyDown(KEY_SPACE)) {
 									DrawRectangleLines(
 										col * TILE_SIZE,
@@ -971,10 +1004,17 @@ int main(void/*int argc, char* argv[]*/) {
                                 // printf("? ");
                                 break;
                             }
-                            }
+							}
+						    if (isInPathList(&pathList, (Point) { col, row })) {
+								DrawRectangle(
+								col * TILE_SIZE,
+								row * TILE_SIZE,
+								TILE_SIZE,
+								TILE_SIZE,
+								RED);
+							}
                         }
                     }
-
 ;
                     // echo map layout to console
                     if (IsKeyPressed(KEY_V)) {
@@ -1014,7 +1054,6 @@ int main(void/*int argc, char* argv[]*/) {
                         }
                     }
 
-
                     // render items
                     for (int i = 0; i < item_data.item_counter; i++) {
                         switch (item_data.items[i].type) {
@@ -1050,6 +1089,7 @@ int main(void/*int argc, char* argv[]*/) {
                         for (int e = 0; e < entity_data.entity_counter; e++) {
                             Entity* ent = &entity_data.entities[e];
                             int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
+                            //DrawRectangle(x_pos, y_pos, 50, 50, RED);
                             if (!rendered[e] && y_pos < lowest_y) {
                                 lowest_y = y_pos;
                                 index_to_render = e;
@@ -1063,6 +1103,7 @@ int main(void/*int argc, char* argv[]*/) {
                     }
                 }
                 EndMode2D();
+				render_player_inventory(zor);
             }
             EndDrawing();
         }
