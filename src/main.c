@@ -48,11 +48,11 @@ const int world_width = 32 * 14;
 #define LOAD_FOREST_DIRT_TILES_TEXTURE() (LoadTexture("res/environment/forest_dirt_tiles.png"))
 #define LOAD_DESERT_TILES_TEXTURE() (LoadTexture("res/environment/desert_tiles.png"))
 // todo: each dungeon tileset should have 9 tiles?
-Vector2 index_to_position(int index) {
-    int row = index / 3;
-    int col = index % 3;
-    return (Vector2) { col * TILE_SIZE, row * TILE_SIZE };
-}
+//Vector2 index_to_position(int index) {
+//    int row = index / 3;
+//    int col = index % 3;
+//    return (Vector2) { col * TILE_SIZE, row * TILE_SIZE };
+//}
 
 #define MAX_INSTANCES 32
 #define INVENTORY_SIZE 32
@@ -794,13 +794,11 @@ int main(void/*int argc, char* argv[]*/) {
                         case TILE_FLOOR:
                         case TILE_CORRIDOR:
                         case TILE_ROOM_ENTRANCE: {
-                            int tile_index = GetRandomValue(0, 8);
-                            Vector2 tile_tx_rect_pos = index_to_position(tile_index);
                             BeginTextureMode(texture_dungeon_floor_tiles);
                             DrawTextureRec(
                                 texture_dungeon_floor_tilemap,
                                 (Rectangle) {
-                                tile_tx_rect_pos.x, tile_tx_rect_pos.y, TILE_SIZE, TILE_SIZE
+                                0, TILE_SIZE * GetRandomValue(0, 8), TILE_SIZE, TILE_SIZE
                             },
                                 (Vector2) {
                                 col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)
@@ -854,7 +852,6 @@ int main(void/*int argc, char* argv[]*/) {
             if (!gsi.init) {
                 Texture2D texture_grass = LOAD_FOREST_GRASS_TILES_TEXTURE();
                 Texture2D texture_dirt = LOAD_FOREST_DIRT_TILES_TEXTURE();
-                int tile_index = 0;
 
                 // reset dungeon floor texture
                 UnloadRenderTexture(texture_dungeon_floor_tiles);
@@ -870,23 +867,17 @@ int main(void/*int argc, char* argv[]*/) {
                         case TILE_FLOOR:
                         case TILE_CORRIDOR:
                         case TILE_ROOM_ENTRANCE: {
-                            tile_index = GetRandomValue(0, 8);
-                            Vector2 tile_tx_rect_pos = index_to_position(tile_index);
                             DrawTextureRec(
                                 texture_grass,
-                                (Rectangle) {
-                                tile_tx_rect_pos.x, tile_tx_rect_pos.y, TILE_SIZE, TILE_SIZE},
+                                (Rectangle){0, TILE_SIZE * GetRandomValue(0, 8), TILE_SIZE, TILE_SIZE },
                                 (Vector2) {col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)}, WHITE);
                             break;
                         }
                         case TILE_WALL:
-                            tile_index = GetRandomValue(0, 8);
-                            Vector2 tile_tx_rect_pos = index_to_position(tile_index);
                             DrawTextureRec(
                                 texture_dirt,
                                 (Rectangle) {
-                                tile_tx_rect_pos.x, tile_tx_rect_pos.y, TILE_SIZE, TILE_SIZE
-                            },
+                                0, TILE_SIZE* GetRandomValue(0, 8), TILE_SIZE, TILE_SIZE},
                                 (Vector2) {
                                 col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)
                             }, WHITE);
@@ -975,7 +966,6 @@ int main(void/*int argc, char* argv[]*/) {
             BeginDrawing();
             {
                 ClearBackground(DARKBROWN);
-                DrawFPS(10, 5);
 
                 DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
                 DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
@@ -1134,6 +1124,7 @@ int main(void/*int argc, char* argv[]*/) {
                     }
                 }
                 EndMode2D();
+                DrawFPS(10, 5);
 				render_player_inventory(zor);
             }
             EndDrawing();
