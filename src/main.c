@@ -18,6 +18,10 @@
 #include "pathfinding.h"
 // extern MapData generate_dungeon();
 
+void print_vector2(Vector2 vec) {
+    printf("Vector2: (%.2f, %.2f)\n", vec.x, vec.y);
+}
+
 #define BLACK_SEMI_TRANSPARENT (Color){0, 0, 0, 128}
 #define WHITE_SEMI_TRANSPARENT (Color){255, 255, 255, 64}
 #define GREEN_SEMI_TRANSPARENT (Color){0, 255, 50, 32}
@@ -40,22 +44,20 @@ const int world_width = 32 * 14;
 #define LOAD_FANTANO_TEXTURE() (LoadTexture("res/fantano/fantano_idle.png"))
 #define LOAD_CYHAR_TEXTURE() (LoadTexture("res/cyhar/cyhar_idle.png"))
 
+// mobs
+#define LOAD_FLY_TEXTURE() (LoadTexture("res/entities/fly.png"))
+
 #define LOAD_SPILLEDCUP_TEXTURE() (LoadTexture("res/items/item_spilledcup.png"))
 #define LOAD_STICK_TEXTURE() (LoadTexture("res/items/item_stick.png"))
 #define LOAD_APPLE_TEXTURE() (LoadTexture("res/items/item_apple.png"))
 
-#define LOAD_FOREST_GRASS_TILES_TEXTURE() (LoadTexture("res/environment/forest_grass_tiles.png"))
-#define LOAD_FOREST_GRASS_DARK_TILES_TEXTURE() (LoadTexture("res/environment/forest_grass_dark_tiles.png"))
-#define LOAD_FOREST_TERRAIN_TEXTURE() (LoadTexture("res/environment/forest_terrain_bushes.png"))
-#define LOAD_FOREST_DIRT_TILES_TEXTURE() (LoadTexture("res/environment/forest_dirt_tiles.png"))
+#define LOAD_FOREST_GRASS_TILES_TEXTURE() (LoadTexture("res/environment/floor_forest_grass.png"))
+#define LOAD_FOREST_GRASS_DARK_TILES_TEXTURE() (LoadTexture("res/environment/floor_grass_blue.png"))
+#define LOAD_FOREST_TERRAIN_TEXTURE() (LoadTexture("res/environment/terrain_forest_bush.png"))
+#define LOAD_FOREST_DIRT_TILES_TEXTURE() (LoadTexture("res/environment/floor_dirt.png"))
+#define LOAD_FOREST_ACTIVE_GRASS() (LoadTexture("res/environment/floor_active_grass.png"))
 
-#define LOAD_DESERT_TILES_TEXTURE() (LoadTexture("res/environment/desert_tiles.png"))
-// todo: each dungeon tileset should have 9 tiles?
-//Vector2 index_to_position(int index) {
-//    int row = index / 3;
-//    int col = index % 3;
-//    return (Vector2) { col * TILE_SIZE, row * TILE_SIZE };
-//}
+#define LOAD_DESERT_TILES_TEXTURE() (LoadTexture("res/environment/floor_sand.png"))
 
 #define MAX_INSTANCES 32
 #define INVENTORY_SIZE 32
@@ -93,7 +95,7 @@ void rotate_smooth(enum Direction target, enum Direction *dir) {
     }
 }
 
-enum AnimationState {
+enum EntityState {
     IDLE,
     MOVE,
     ATTACK_MELEE
@@ -130,17 +132,29 @@ typedef struct {
     int n_frames;
 } Animation;
 
+enum EntityType {
+    ENT_ZOR,
+    ENT_FANTANO,
+    ENT_CYHAR,
+    ENT_FLY
+};
+
 typedef struct {
+    enum EntityType ent_type;
     Vector2 position; // grid coordinate position
     Texture2D texture;
     Animation animation;
-    enum AnimationState animation_state;
+    enum EntityState state;
     enum Direction direction;
     bool is_moving;
     Vector2 target_position;
     enum ItemType inventory[32];
     int inventory_item_count;
     bool prevent_pickup;
+    Vector2 original_position;
+    float lunge_progress;
+    bool can_swap_positions;
+    int health;
 } Entity;
 
 typedef struct {
@@ -153,7 +167,6 @@ typedef struct {
     Entity entity;
 
 } Turn;
-
 
 typedef struct {
     enum ItemType type;
@@ -170,6 +183,17 @@ typedef struct {
     Item items[MAX_INSTANCES];
     int item_counter;
 } ItemData;
+
+//enum DungeonTextureLayer {
+//    LAYER_FLOOR,
+//    //LAYER_TERRAIN, // terrain layer will be rendered onto floor layer anyway?
+//    LAYER_FLOOR_ABOVE_MODELS
+//};
+//
+//typedef struct {
+//    RenderTexture textures[2]; // layers above
+//} DungeonTexture;
+//#define DUNGEON_TEXTURE_LAYERS 2
 
 Vector2 direction_to_vector2(enum Direction direction) {
     switch (direction) {
@@ -195,12 +219,88 @@ Vector2 direction_to_vector2(enum Direction direction) {
     }
 }
 
+enum Direction opposite_direction(enum Direction direction) {
+    switch (direction) {
+    case DOWN:
+        return UP;
+    case DOWNRIGHT:
+        return UPLEFT;
+    case RIGHT:
+        return LEFT;
+    case UPRIGHT:
+        return DOWNLEFT;
+    case UP:
+        return DOWN;
+    case UPLEFT:
+        return DOWNRIGHT;
+    case LEFT:
+        return RIGHT;
+    case DOWNLEFT:
+        return UPRIGHT;
+    default:
+        // Handle invalid direction by returning a default value or an error
+        return direction; // or return a default direction like UP
+    }
+}
+
+enum Direction vector_to_direction(Vector2 vector) {
+    if (vector.x == 0.0f && vector.y == 1.0f) {
+        return DOWN;
+    }
+    else if (vector.x == 1.0f && vector.y == 1.0f) {
+        return DOWNRIGHT;
+    }
+    else if (vector.x == 1.0f && vector.y == 0.0f) {
+        return RIGHT;
+    }
+    else if (vector.x == 1.0f && vector.y == -1.0f) {
+        return UPRIGHT;
+    }
+    else if (vector.x == 0.0f && vector.y == -1.0f) {
+        return UP;
+    }
+    else if (vector.x == -1.0f && vector.y == -1.0f) {
+        return UPLEFT;
+    }
+    else if (vector.x == -1.0f && vector.y == 0.0f) {
+        return LEFT;
+    }
+    else if (vector.x == -1.0f && vector.y == 1.0f) {
+        return DOWNLEFT;
+    }
+}
+
+// move entity 1 square forward (in the direction they're facing)
+void move_entity_forward(Entity* en) {
+    // move entity grid position
+    // (when entity is moving)
+    if (!en->is_moving) return;
+
+    const Vector2 movement = direction_to_vector2(en->direction);
+
+    float max_move_distance = GetFrameTime() * GRID_MOVESPEED;
+
+    float distance_to_target = Vector2Distance(en->position, en->target_position);
+
+    if (max_move_distance > distance_to_target) {
+        max_move_distance = distance_to_target;
+    }
+
+    if (max_move_distance >= distance_to_target) {
+        en->position = en->target_position;
+        en->is_moving = false;
+        en->state = IDLE;
+    }
+    else {
+        en->position.x += movement.x * max_move_distance;
+        en->position.y += movement.y * max_move_distance;
+    }
+}
+
 void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
 
     // if no key is held, ensure that isMoving is set to false
-    if (en->is_moving) return;
-    if (en->animation_state == ATTACK_MELEE) return;
-    en->animation_state = IDLE;
+    if (en->state != IDLE) return;
 
     bool should_move = false;
 
@@ -244,7 +344,7 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
     }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !should_move) {
-        en->animation_state = ATTACK_MELEE;
+        en->state = ATTACK_MELEE;
         en->animation.cur_frame = 0;
     }
 
@@ -275,7 +375,7 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
             ||  tiles[(int)en->position.x][i_targ_y] == TILE_WALL) {
                 //printf("Block diagonal movement\n");
                 en->is_moving = false;
-                en->animation_state = IDLE;
+                en->state = IDLE;
                 return;
             }
         }
@@ -283,7 +383,7 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
             case TILE_WALL: {
                 // printf("Invalid movement.!\n");
                 en->is_moving = false;
-                en->animation_state = IDLE;
+                en->state = IDLE;
                 return;
                 break;
             }
@@ -291,7 +391,7 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
             case TILE_CORRIDOR:
             case TILE_FLOOR: {
                 en->is_moving = true;
-                en->animation_state = MOVE;
+                en->state = MOVE;
                 break;
             }
             default: {
@@ -302,30 +402,28 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
     }
 }
 
-void move_entity(Entity* en) {
-    // move entity grid position
-    // (when entity is moving)
-    if (!en->is_moving) return;
-
-    const Vector2 movement = direction_to_vector2(en->direction);
+bool move_entity_in_direction(Entity* en, enum Direction dir) {
+    const Vector2 movement = direction_to_vector2(dir);
 
     float max_move_distance = GetFrameTime() * GRID_MOVESPEED;
 
-    float distance_to_target = Vector2Distance(en->position, en->target_position);
+    float distance_to_target = Vector2Distance(en->position, movement);
 
     if (max_move_distance > distance_to_target) {
         max_move_distance = distance_to_target;
     }
 
     if (max_move_distance >= distance_to_target) {
-        en->position = en->target_position;
+        en->position = movement;
         en->is_moving = false;
-        en->animation_state = IDLE;
+        en->state = IDLE;
+        return true;
     }
     else {
         en->position.x += movement.x * max_move_distance;
         en->position.y += movement.y * max_move_distance;
     }
+    return false;
 }
 
 void move_entity_freely(Entity* en) {
@@ -347,17 +445,11 @@ void update_animation(Animation* anim) {
 	int frames_to_advance = (int)(anim->cur_frame_time / anim->max_frame_time);
 	anim->cur_frame_time -= frames_to_advance * anim->max_frame_time;
 
-
 	anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
 
 	if (anim->cur_frame % anim->n_frames == 0) {
 		anim->cur_frame = 0;
 	}
-	//float elapsed_time = GetFrameTime();
-	//int frames_to_advance = (int)(elapsed_time / anim->max_frame_time);
-
-	//// Advance the frame by the calculated amount
-	//anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
 }
 
 Vector2 position_to_grid_position(Vector2 pos) {
@@ -398,36 +490,122 @@ void render_entity(Entity* en) {
             );
 }
 
-void update_zor_animation(Entity* zor) {
+void lunge_entity(Entity* en) {
+    if (en->state != ATTACK_MELEE) {
+        return;
+    }
 
-    // higher fps seems to speed this up
-    switch (zor->animation_state) {
-    case IDLE: {
-        zor->animation.max_frame_time = 0.02f;
-        zor->animation.y_offset = 0;
-        break;
+    if (Vector2Equals(en->original_position, (Vector2) { 0, 0 })) {
+        en->original_position = en->position;
     }
-    case MOVE: {
-        zor->animation.max_frame_time = 0.030f;
-        // zor->animation.yOffset = 2048.0f;
-        zor->animation.y_offset = 2048;
-        break;
+
+    const Vector2 movement = direction_to_vector2(en->direction);
+
+    float lunge_distance = 1.0f;
+    float lunge_speed = 2.5f;
+    float lunge_distance_this_frame = lunge_speed * GetFrameTime();
+
+    if (en->lunge_progress < lunge_distance / 2) {
+        en->position = Vector2Add(en->position, Vector2Scale(movement, lunge_distance_this_frame));
     }
-    case ATTACK_MELEE: {
-        zor->animation.max_frame_time = 0.017f;
-        zor->animation.y_offset = 2048 + 2048;
-        if (zor->animation.cur_frame == zor->animation.n_frames - 1) {
-            zor->animation_state = IDLE;
+    else {
+        en->position = Vector2Subtract(en->position, Vector2Scale(movement, lunge_distance_this_frame));
+    }
+
+    en->lunge_progress += lunge_distance_this_frame;
+
+    if (en->lunge_progress >= lunge_distance) {
+        en->is_moving = false;
+        en->lunge_progress = 0.0f;
+        en->state = IDLE;
+        en->position = en->original_position;
+        en->original_position = (Vector2){ 0, 0 };
+    }
+}
+
+void update_animation_state(Entity* ent) {
+    switch (ent->ent_type) {
+    case ENT_ZOR: {
+        switch (ent->state) {
+			case IDLE: {
+				ent->animation.max_frame_time = 0.02f;
+				ent->animation.y_offset = 0;
+				break;
+			}
+			case MOVE: {
+				ent->animation.max_frame_time = 0.030f;
+				ent->animation.y_offset = 2048;
+				break;
+			}
+			case ATTACK_MELEE: {
+				ent->animation.max_frame_time = 0.017f;
+				ent->animation.y_offset = 2048 + 2048;
+				lunge_entity(ent);
+				break;
+			}
+			default: {
+				break;
+			}
+        }
+        break;
+	}
+    case ENT_FANTANO: {
+        switch (ent->state) {
+			case IDLE: {
+				ent->animation.max_frame_time = 0.017f;
+				ent->animation.y_offset = 0;
+				break;
+			}
+			case ATTACK_MELEE: {
+				lunge_entity(ent);
+				break;
+			}
+			default: {
+				break;
+			}
         }
         break;
     }
-    default: {
-        zor->animation.max_frame_time = 0.0f;
-        zor->animation.y_offset = 0;
+    case ENT_CYHAR: {
+        switch (ent->state) {
+        case IDLE: {
+            ent->animation.max_frame_time = 0.019f;
+            ent->animation.y_offset = 0;
+            break;
+        }
+        case ATTACK_MELEE: {
+            lunge_entity(ent);
+            break;
+        }
+        default: {
+            break;
+        }
+        }
         break;
     }
+    case ENT_FLY: {
+        switch (ent->state) {
+			case IDLE: {
+				ent->animation.max_frame_time = 0.037f;
+				ent->animation.y_offset = 0;
+				break;
+			}
+			case ATTACK_MELEE: {
+				ent->animation.max_frame_time = 0.010f;
+				ent->animation.y_offset = 2048;
+				lunge_entity(ent);
+				break;
+			}
+			default: {
+				break;
+			}
+		}
+        break;
     }
-    update_animation(&zor->animation);
+    default:
+        break;
+    }
+	update_animation(&ent->animation);
 }
 
 bool item_exists_on_tile(int col, int row, const ItemData* item_data) {
@@ -569,22 +747,6 @@ void pickup_item(const int index, ItemData* item_data, Entity* entity) {
 }
 
 void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
-    /*for (int i = 0; i < item_data->item_counter; i++) {
-        Item* item = &item_data->items[i];
-        if (Vector2Equals(item->position, entity->position)) {
-            if (!entity->prevent_pickup) {
-                pickup_item(i, item_data, entity);
-                delete_item(i, item_data);
-                printf("Entity item pickup.\n");
-            }
-        }
-        else {
-            if (entity->prevent_pickup) {
-                entity->prevent_pickup = false;
-            }
-        }
-    }*/
-    
     if (!entity->prevent_pickup) {
 		// entity can pickup item
         for (int i = 0; i < item_data->item_counter; i++) {
@@ -595,13 +757,6 @@ void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
             }
         }
 	}
-	//else {
- //       Vector2 pos = entity->position;
- //       if (!Vector2Equals(entity->position, item_data->items))
- //       //if (!item_exists_on_tile(pos.x, pos.y, item_data)) {
- //           entity->prevent_pickup = false;
- //       }
-	//}
 }
 
 void delete_item_from_entity_inventory(const int index, Entity* entity) {
@@ -692,6 +847,103 @@ void remove_entity(const int index, EntityData* entity_data) {
     printf("Deleted entity index %i, %i instances left on map.\n", index, entity_data->entity_counter);
 }
 
+void generate_enchanted_groves_dungeon_texture(const MapData* map_data, RenderTexture2D* dungeon_texture/*DungeonTexture* dungeon_texture*/) {
+	Texture2D floor_texture = LOAD_FOREST_GRASS_TILES_TEXTURE();
+	Texture2D terrain_texture = LOAD_FOREST_TERRAIN_TEXTURE();
+    Texture2D active_floor_texture = LOAD_FOREST_ACTIVE_GRASS();
+
+	UnloadRenderTexture(*dungeon_texture);
+	*dungeon_texture = LoadRenderTexture(map_data->cols * TILE_SIZE, map_data->rows * TILE_SIZE);
+
+    // render to floor layer
+	BeginTextureMode(*dungeon_texture);
+    {
+        // generate floor layer
+        for (int row = 0; row < map_data->rows; row++) {
+            for (int col = 0; col < map_data->cols; col++) {
+                switch (map_data->tiles[col][row]) {
+                case TILE_WALL:
+                case TILE_CORRIDOR:
+                case TILE_ROOM_ENTRANCE:
+                case TILE_FLOOR: {
+                    DrawTextureRec(
+                        floor_texture,
+                        (Rectangle) {TILE_SIZE* GetRandomValue(0, 12), 0, TILE_SIZE, -TILE_SIZE},
+                        (Vector2) {col* TILE_SIZE, ((map_data->rows - row - 1) * TILE_SIZE)}, 
+                        WHITE);
+                    bool floor_grass = GetRandomValue(0, 13) == 0;
+                    if (floor_grass) {
+                        /*DrawTextureRec(
+                            active_floor_texture,
+                            (Rectangle) {0, 50, TILE_SIZE, -TILE_SIZE},
+                            (Vector2) {col* TILE_SIZE, ((map_data->rows - row - 1) * TILE_SIZE)},
+                            WHITE);*/
+                    }
+                    break;
+                }
+                default: {
+                    break;
+                }
+                }
+            }
+        }
+        // generate terrain layer
+        for (int row = 0; row < map_data->rows; row++) {
+            for (int col = 0; col < map_data->cols; col++) {
+                switch (map_data->tiles[col][row]) {
+                case TILE_WALL:
+                    DrawTextureRec(
+                        terrain_texture,
+                        (Rectangle) {
+                        150 * GetRandomValue(0, 3), 0, 150, -150
+                    },
+                        (Vector2) {
+                        col* TILE_SIZE - 25, ((map_data->rows - row - 1) * TILE_SIZE - 25)
+                    }, WHITE);
+                    break;
+                default: {
+                    break;
+                }
+                }
+            }
+        }
+    }
+	EndTextureMode();
+
+    UnloadTexture(active_floor_texture);
+    UnloadTexture(floor_texture);
+    UnloadTexture(terrain_texture);
+}
+
+PathList find_path_between_entities(MapData* map_data, Entity* start_entity, Entity* target_entity) {
+    PathList path_list = { .path = { 0 }, .length = 0 };
+    Point start_point = { (int)start_entity->position.x, (int)start_entity->position.y };
+    Point target_point = { (int)target_entity->position.x, (int)target_entity->position.y };
+    aStarSearch(map_data, start_point, target_point, &path_list, false);
+    return path_list;
+}
+
+void ai_simple_follow_melee_attack(Entity* ent, Entity* target, MapData* map_data) {
+    if (ent->is_moving) return;
+    if (target->is_moving) return;
+
+    PathList path_list = find_path_between_entities(map_data, ent, target);
+    
+    if (path_list.length >= 1) {
+        Point next_p = path_list.path[path_list.length-1];
+        Vector2 next_v = (Vector2){ next_p.x, next_p.y };
+        Vector2 movement = Vector2Subtract(next_v, ent->position);
+        ent->direction = vector_to_direction(movement);
+    }
+    else {
+        // next to target
+        Vector2 movement = Vector2Subtract(target->position, ent->position);
+        if (ent->state == IDLE && target->state == IDLE)
+			ent->direction = vector_to_direction(movement);
+        ent->state = ATTACK_MELEE;
+    }
+}
+
 int main(void/*int argc, char* argv[]*/) {
 
     GameStateInfo gsi = { GS_INTRO_DUNGEON, false };
@@ -702,7 +954,7 @@ int main(void/*int argc, char* argv[]*/) {
     InitWindow(window_width, window_height, "mDungeon");
     SetWindowState(FLAG_VSYNC_HINT);
     SetWindowState(FLAG_WINDOW_RESIZABLE);
-    //SetTargetFPS();
+    //SetTargetFPS(30);
 
     SetRandomSeed(1337);
 
@@ -721,31 +973,36 @@ int main(void/*int argc, char* argv[]*/) {
 
     // init the entities
 	create_entity_instance(&entity_data, (Entity) {
+		.ent_type = ENT_ZOR,
 		.texture = LOAD_ZOR_TEXTURE(),
-			.animation = (Animation){
-				.max_frame_time = 0.023,
-				.n_frames = 20
-		}
+		.animation = (Animation){ .n_frames = 20 },
+        .health = 100
 	});
     zor = GET_LAST_ENTITY_REF();
 
 	create_entity_instance(&entity_data, (Entity) {
-		.texture = LOAD_FANTANO_TEXTURE(),
-			.animation = (Animation){
-				.max_frame_time = 0.017,
-				.n_frames = 20
-		}
+        .ent_type = ENT_FANTANO,
+        .texture = LOAD_FANTANO_TEXTURE(),
+		.can_swap_positions = true,
+		.animation = (Animation){ .n_frames = 20 },
+        .health = 100
 	});
 	fantano = GET_LAST_ENTITY_REF();
 
 	create_entity_instance(&entity_data, (Entity) {
+        .ent_type = ENT_CYHAR,
 		.texture = LOAD_CYHAR_TEXTURE(),
-			.animation = (Animation){
-				.max_frame_time = 0.017,
-				.n_frames = 20
-		}
+		.animation = (Animation){ .n_frames = 20 },
+        .health = 100
 	});
 	cyhar = GET_LAST_ENTITY_REF();
+
+    create_entity_instance(&entity_data, (Entity) {
+        .ent_type = ENT_FLY,
+        .texture = LOAD_FLY_TEXTURE(),
+		.animation = (Animation){ .n_frames = 10 },
+        .health = 100
+    });
 
     ItemData item_data = (ItemData){.items = { 0 }, .item_counter = 0};
     nullify_all_items(&item_data);
@@ -758,7 +1015,6 @@ int main(void/*int argc, char* argv[]*/) {
     RenderTexture2D dungeon_texture = { 0 };
 
     MapData map_data = { 0 };
-    //int current_floor = 0; 
 
     // main loop
     while (!WindowShouldClose()) {
@@ -783,86 +1039,24 @@ int main(void/*int argc, char* argv[]*/) {
         // update game logic
         switch (gsi.game_state) {
         case GS_INTRO_DUNGEON: {
-			if (!gsi.init) {
-				Texture2D floor_texture = LOAD_FOREST_GRASS_TILES_TEXTURE();
-				Texture2D terrain_texture = LOAD_FOREST_TERRAIN_TEXTURE();
+            if (!gsi.init) {
 
-                // generate new map
-				map_data = generate_map(DUNGEON_PRESET_BASIC);
-
-				// reset dungeon floor texture
-				UnloadRenderTexture(dungeon_texture);
-                dungeon_texture = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
-
-                // generate terrain layer
-                BeginTextureMode(dungeon_texture);
-                // generate floor texture
-                for (int row = 0; row < map_data.rows; row++) {
-                    for (int col = 0; col < map_data.cols; col++) {
-                        switch (map_data.tiles[col][row]) {
-                        case TILE_WALL:
-                        case TILE_CORRIDOR:
-                        case TILE_ROOM_ENTRANCE:
-                        case TILE_FLOOR: {
-                            DrawTextureRec(
-                                floor_texture,
-                                (Rectangle) {
-                                TILE_SIZE* GetRandomValue(0, 8), 0, TILE_SIZE, -TILE_SIZE
-                            },
-                                (Vector2) {
-                                col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)
-                            }, WHITE);
-                            break;
-                        }
-                        default: {
-                            break;
-                        }
-                        }
-                    }
-                }
-                for (int row = 0; row < map_data.rows; row++) {
-                    for (int col = 0; col < map_data.cols; col++) {
-                        switch (map_data.tiles[col][row]) {
-                        case TILE_WALL:
-                            DrawTextureRec(
-                                terrain_texture,
-                                (Rectangle) {
-                                150 * GetRandomValue(0, 3), 0, 150, -150
-                            },
-                                (Vector2) {
-                                col* TILE_SIZE - 25, ((map_data.rows - row - 1) * TILE_SIZE - 25)
-                            }, WHITE);
-                            break;
-                        default: {
-                            break;
-                        }
-                        }
-                    }
-                }
-                EndTextureMode();
+                map_data = generate_map(DUNGEON_PRESET_BASIC);
+                generate_enchanted_groves_dungeon_texture(&map_data, &dungeon_texture);
 
                 nullify_all_items(&item_data);
-                spawn_items(
-                    ITEM_STICK,
-                    &item_data,
-                    &map_data,
-                    3, 5
-                );
-                spawn_items(
-                    ITEM_APPLE,
-                    &item_data,
-                    &map_data,
-                    2, 5
-                );
+                spawn_items(ITEM_STICK, &item_data, &map_data, 3, 5);
+                spawn_items(ITEM_APPLE, &item_data, &map_data, 2, 5);
 
-				zor->is_moving = false;
-				zor->animation_state = IDLE;
-				zor->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
-				fantano->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
-				cyhar->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
-				printf("Init basic dungeon.\n");
-				gsi.init = true;
-			}
+                zor->is_moving = false;
+                zor->state = IDLE;
+                for (int i = 0; i < entity_data.entity_counter; i++) {
+                    entity_data.entities[i].position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
+                }
+
+                printf("Init basic dungeon.\n");
+                gsi.init = true;
+            }
             if (IsKeyPressed(KEY_R)) {
                 set_gamestate(&gsi, GS_ADVANCED_DUNGEON);
             }
@@ -880,7 +1074,7 @@ int main(void/*int argc, char* argv[]*/) {
                 dungeon_texture = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
 
                 //for (int row = 0; row < map_data.rows; row++) {
-				BeginTextureMode(dungeon_texture);
+                BeginTextureMode(dungeon_texture);
                 for (int row = 0; row < map_data.rows; row++) {
                     for (int col = 0; col < map_data.cols; col++) {
                         switch (map_data.tiles[col][row]) {
@@ -903,32 +1097,17 @@ int main(void/*int argc, char* argv[]*/) {
                         }
                     }
                 }
-				EndTextureMode();
+                EndTextureMode();
 
                 UnloadTexture(texture_dungeon_floor_tilemap);
 
                 // items
                 nullify_all_items(&item_data);
-                spawn_items(
-                    ITEM_SPILLEDCUP,
-                    &item_data,
-                    &map_data,
-                    1, 3
-                );
-                spawn_items(
-                    ITEM_STICK,
-                    &item_data,
-                    &map_data,
-                    4, 8
-                );
-                spawn_items(
-                    ITEM_APPLE,
-                    &item_data,
-                    &map_data,
-                    2, 5
-                );
+                spawn_items(ITEM_SPILLEDCUP, &item_data, &map_data, 1, 3);
+                spawn_items(ITEM_STICK, &item_data, &map_data, 4, 8);
+                spawn_items(ITEM_APPLE, &item_data, &map_data, 2, 5);
                 zor->is_moving = false;
-                zor->animation_state = IDLE;
+                zor->state = IDLE;
                 zor->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
                 fantano->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
                 cyhar->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
@@ -947,19 +1126,45 @@ int main(void/*int argc, char* argv[]*/) {
         }
         }
         control_entity(zor, map_data.tiles);
-        move_entity(zor); // perhaps move_entities (once there is ai)
-        // move_entity_freely(playerEntity);
+        if (zor->is_moving) {
+            move_entity_forward(zor);
+        }
+        //GET_LAST_ENTITY_REF()->state = ATTACK_MELEE;
+		 // perhaps move_entities (once there is ai)
+         //move_entity_freely(zor);
 
         if (IsKeyPressed(KEY_E) && zor->inventory_item_count > 0) {
             drop_item(zor->inventory_item_count - 1, zor, &item_data);
         }
 
-        update_zor_animation(zor);
-        update_animation(&fantano->animation);
-        update_animation(&cyhar->animation);
+        for (int i = 0; i < entity_data.entity_counter; i++) {
+            Entity* ent = &entity_data.entities[i];
+            update_animation_state(ent);
+
+            /*if (ent->ent_type == ENT_FLY)
+                ai_simple_follow_melee_attack(ent, zor, &map_data);*/
+
+        }
+		//ai_simple_follow_melee_attack(fantano, zor, & map_data);
+
+		/*PathList pathList = { .path = { 0 }, .length = 0 };
+		aStarSearch(
+			&map_data,
+			(Point) {(int)GET_LAST_ENTITY_REF()->position.x, (int)GET_LAST_ENTITY_REF()->position.y },
+			(Point) {(int)zor->position.x, (int)zor->position.y },
+			& pathList,
+			false
+		);*/
+        ai_simple_follow_melee_attack(GET_LAST_ENTITY_REF(), zor, &map_data);
 
 
-        Vector2 cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+		Vector2 cam_target = { 0 };
+		if (zor->state == ATTACK_MELEE) {
+            cam_target = Vector2Multiply(zor->original_position, (Vector2) { TILE_SIZE, TILE_SIZE });
+        }
+        else {
+			cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+        }
         cam_target.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
         cam_target.y += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 4);
         camera.target = cam_target;
@@ -967,16 +1172,46 @@ int main(void/*int argc, char* argv[]*/) {
         scan_items_for_pickup(&item_data, zor);
         scan_items_for_pickup(&item_data, fantano);
 
+		// echo map layout to console
+		if (IsKeyPressed(KEY_V)) {
+			for (int row = 0; row < map_data.rows; row++) {
+				for (int col = 0; col < map_data.cols; col++) {
+					switch (map_data.tiles[col][row]) {
+					case TILE_WALL: {
+						printf("~ ");
+						break;
+					}
+					case TILE_CORRIDOR:
+						printf("C ");
+					case TILE_FLOOR: {
+
+						//if (inList(&path, (Node){col, row})) {
+						/*if (isInPathList(&pathList, (Point) { col, row })) {
+							printf("P ");
+						}*/
+						//else
+							printf("X ");
+						break;
+					}
+					case TILE_INVALID: {
+						break;
+					}
+					case TILE_ROOM_ENTRANCE: {
+						break;
+					}
+					default: {
+						printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, map_data.tiles[col][row]);
+						// printf("? ");
+						break;
+					}
+					}
+				}
+				printf("\n");
+			}
+		}
+
         // render
         {
-            PathList pathList = { .path = { 0 }, .length = 0 };
-            aStarSearch(
-                &map_data,
-                (Point) {(int)zor->position.x, (int)zor->position.y},
-                (Point) {(int)fantano->position.x, (int)fantano->position.y },
-				& pathList,
-				false
-			);
 
             // do rendering
             BeginDrawing();
@@ -989,7 +1224,6 @@ int main(void/*int argc, char* argv[]*/) {
                 BeginMode2D(camera);
                 {
                     // render map
-
 					DrawTexture(dungeon_texture.texture, 0, 0, WHITE);
                     for (int row = 0; row < map_data.rows; row++) {
                         for (int col = 0; col < map_data.cols; col++) {
@@ -1002,44 +1236,6 @@ int main(void/*int argc, char* argv[]*/) {
                                     TILE_SIZE,
                                     BLACK_SEMI_TRANSPARENT);
                             }
-                        }
-                    }
-;
-                    // echo map layout to console
-                    if (IsKeyPressed(KEY_V)) {
-                        for (int row = 0; row < map_data.rows; row++) {
-                            for (int col = 0; col < map_data.cols; col++) {
-                                switch (map_data.tiles[col][row]) {
-                                case TILE_WALL: {
-                                    printf("~ ");
-                                    break;
-                                }
-                                case TILE_CORRIDOR:
-                                    printf("C ");
-                                case TILE_FLOOR: {
-
-                                    //if (inList(&path, (Node){col, row})) {
-                                    if (isInPathList(&pathList, (Point) { col, row })) {
-                                        printf("P ");
-                                    }
-                                    else
-                                        printf("X ");
-                                    break;
-                                }
-                                case TILE_INVALID: {
-                                    break;
-                                }
-                                case TILE_ROOM_ENTRANCE: {
-                                    break;
-                                }
-                                default: {
-                                    printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, map_data.tiles[col][row]);
-                                    // printf("? ");
-                                    break;
-                                }
-                                }
-                            }
-                            printf("\n");
                         }
                     }
 
@@ -1069,27 +1265,30 @@ int main(void/*int argc, char* argv[]*/) {
                         }
                     }
 
-                    // y sort
-                    bool rendered[MAX_INSTANCES] = { false };
-                    for (int i = 0; i < entity_data.entity_counter; i++) {
-						int lowest_y = 99999;
-                        int index_to_render = -1;
+                    // y sort render entities
+                    {
+                        bool rendered[MAX_INSTANCES] = { false };
+                        for (int i = 0; i < entity_data.entity_counter; i++) {
+                            int lowest_y = 99999;
+                            int index_to_render = -1;
 
-                        for (int e = 0; e < entity_data.entity_counter; e++) {
-                            Entity* ent = &entity_data.entities[e];
-                            int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
-                            //DrawRectangle(x_pos, y_pos, 50, 50, RED);
-                            if (!rendered[e] && y_pos < lowest_y) {
-                                lowest_y = y_pos;
-                                index_to_render = e;
+                            for (int e = 0; e < entity_data.entity_counter; e++) {
+                                Entity* ent = &entity_data.entities[e];
+                                int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
+                                //DrawRectangle(x_pos, y_pos, 50, 50, RED);
+                                if (!rendered[e] && y_pos < lowest_y) {
+                                    lowest_y = y_pos;
+                                    index_to_render = e;
+                                }
+                            }
+
+                            if (index_to_render != -1) {
+                                render_entity(&entity_data.entities[index_to_render]);
+                                rendered[index_to_render] = true;
                             }
                         }
-
-                        if (index_to_render != -1) {
-                            render_entity(&entity_data.entities[index_to_render]);
-                            rendered[index_to_render] = true;
-                        }
                     }
+
                 }
                 EndMode2D();
                 DrawFPS(10, 5);
@@ -1101,9 +1300,6 @@ int main(void/*int argc, char* argv[]*/) {
 
     // delete item textures
     {
-        /*Texture2D texture_item_spilledcup = LOAD_SPILLEDCUP_TEXTURE();
-        Texture2D texture_item_stick = LOAD_STICK_TEXTURE();
-        Texture2D texture_item_apple = LOAD_APPLE_TEXTURE();*/
         UnloadTexture(texture_item_spilledcup);
         UnloadTexture(texture_item_stick);
         UnloadTexture(texture_item_apple);
