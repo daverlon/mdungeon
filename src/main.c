@@ -22,7 +22,7 @@
 #define WHITE_SEMI_TRANSPARENT (Color){255, 255, 255, 64}
 #define GREEN_SEMI_TRANSPARENT (Color){0, 255, 50, 32}
 #define LIGHTBLUE (Color){50, 100, 200, 150}
-#define LIGHTGREEN (Color){50, 200, 100, 50}
+#define LIGHTGREEN (Color){50, 200, 100, 250}
 #define LIGHTYELLOW (Color){100, 100, 50, 100}
 
 const int world_width = 32 * 14;
@@ -45,7 +45,10 @@ const int world_width = 32 * 14;
 #define LOAD_APPLE_TEXTURE() (LoadTexture("res/items/item_apple.png"))
 
 #define LOAD_FOREST_GRASS_TILES_TEXTURE() (LoadTexture("res/environment/forest_grass_tiles.png"))
+#define LOAD_FOREST_GRASS_DARK_TILES_TEXTURE() (LoadTexture("res/environment/forest_grass_dark_tiles.png"))
+#define LOAD_FOREST_TERRAIN_TEXTURE() (LoadTexture("res/environment/forest_terrain_bushes.png"))
 #define LOAD_FOREST_DIRT_TILES_TEXTURE() (LoadTexture("res/environment/forest_dirt_tiles.png"))
+
 #define LOAD_DESERT_TILES_TEXTURE() (LoadTexture("res/environment/desert_tiles.png"))
 // todo: each dungeon tileset should have 9 tiles?
 //Vector2 index_to_position(int index) {
@@ -249,6 +252,8 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS]) {
     Vector2 movement = direction_to_vector2(en->direction);
     
     if (!Vector2Equals((movement), (Vector2) { 0 }) && should_move) {
+        if (en->prevent_pickup)
+            en->prevent_pickup = false;
         // printf("MOVE!\n");
         // printf("X: %2.0f -> %2.0f\n", en->position.x, en->position.x+1.0f);
         // printf("Y: %2.0f -> %2.0f\n", en->position.y, en->position.y+1.0f);
@@ -590,12 +595,13 @@ void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
             }
         }
 	}
-	else {
-        Vector2 pos = entity->position;
-        if (!item_exists_on_tile(pos.x, pos.y, item_data)) {
-            entity->prevent_pickup = false;
-        }
-	}
+	//else {
+ //       Vector2 pos = entity->position;
+ //       if (!Vector2Equals(entity->position, item_data->items))
+ //       //if (!item_exists_on_tile(pos.x, pos.y, item_data)) {
+ //           entity->prevent_pickup = false;
+ //       }
+	//}
 }
 
 void delete_item_from_entity_inventory(const int index, Entity* entity) {
@@ -696,7 +702,7 @@ int main(void/*int argc, char* argv[]*/) {
     InitWindow(window_width, window_height, "mDungeon");
     SetWindowState(FLAG_VSYNC_HINT);
     SetWindowState(FLAG_WINDOW_RESIZABLE);
-    //SetTargetFPS(144);
+    //SetTargetFPS();
 
     SetRandomSeed(1337);
 
@@ -749,7 +755,7 @@ int main(void/*int argc, char* argv[]*/) {
     Texture2D texture_item_stick = LOAD_STICK_TEXTURE();
     Texture2D texture_item_apple = LOAD_APPLE_TEXTURE();
     
-    RenderTexture2D texture_dungeon_floor_tiles = { 0 };
+    RenderTexture2D dungeon_texture = { 0 };
 
     MapData map_data = { 0 };
     //int current_floor = 0; 
@@ -777,33 +783,35 @@ int main(void/*int argc, char* argv[]*/) {
         // update game logic
         switch (gsi.game_state) {
         case GS_INTRO_DUNGEON: {
-            if (!gsi.init) {
-                // reset tilemap texture 
-                Texture2D texture_dungeon_floor_tilemap = LOAD_DESERT_TILES_TEXTURE();
+			if (!gsi.init) {
+				Texture2D floor_texture = LOAD_FOREST_GRASS_TILES_TEXTURE();
+				Texture2D terrain_texture = LOAD_FOREST_TERRAIN_TEXTURE();
 
-                // reset dungeon floor texture
-                UnloadRenderTexture(texture_dungeon_floor_tiles);
+                // generate new map
+				map_data = generate_map(DUNGEON_PRESET_BASIC);
 
-                map_data = generate_map(DUNGEON_PRESET_BASIC);
-                texture_dungeon_floor_tiles = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
+				// reset dungeon floor texture
+				UnloadRenderTexture(dungeon_texture);
+                dungeon_texture = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
 
-                //for (int row = 0; row < map_data.rows; row++) {
+                // generate terrain layer
+                BeginTextureMode(dungeon_texture);
+                // generate floor texture
                 for (int row = 0; row < map_data.rows; row++) {
                     for (int col = 0; col < map_data.cols; col++) {
                         switch (map_data.tiles[col][row]) {
-                        case TILE_FLOOR:
+                        case TILE_WALL:
                         case TILE_CORRIDOR:
-                        case TILE_ROOM_ENTRANCE: {
-                            BeginTextureMode(texture_dungeon_floor_tiles);
+                        case TILE_ROOM_ENTRANCE:
+                        case TILE_FLOOR: {
                             DrawTextureRec(
-                                texture_dungeon_floor_tilemap,
+                                floor_texture,
                                 (Rectangle) {
-                                0, TILE_SIZE * GetRandomValue(0, 8), TILE_SIZE, TILE_SIZE
+                                TILE_SIZE* GetRandomValue(0, 8), 0, TILE_SIZE, -TILE_SIZE
                             },
                                 (Vector2) {
                                 col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)
                             }, WHITE);
-                            EndTextureMode();
                             break;
                         }
                         default: {
@@ -812,10 +820,94 @@ int main(void/*int argc, char* argv[]*/) {
                         }
                     }
                 }
+                for (int row = 0; row < map_data.rows; row++) {
+                    for (int col = 0; col < map_data.cols; col++) {
+                        switch (map_data.tiles[col][row]) {
+                        case TILE_WALL:
+                            DrawTextureRec(
+                                terrain_texture,
+                                (Rectangle) {
+                                150 * GetRandomValue(0, 3), 0, 150, -150
+                            },
+                                (Vector2) {
+                                col* TILE_SIZE - 25, ((map_data.rows - row - 1) * TILE_SIZE - 25)
+                            }, WHITE);
+                            break;
+                        default: {
+                            break;
+                        }
+                        }
+                    }
+                }
+                EndTextureMode();
+
+                nullify_all_items(&item_data);
+                spawn_items(
+                    ITEM_STICK,
+                    &item_data,
+                    &map_data,
+                    3, 5
+                );
+                spawn_items(
+                    ITEM_APPLE,
+                    &item_data,
+                    &map_data,
+                    2, 5
+                );
+
+				zor->is_moving = false;
+				zor->animation_state = IDLE;
+				zor->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
+				fantano->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
+				cyhar->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
+				printf("Init basic dungeon.\n");
+				gsi.init = true;
+			}
+            if (IsKeyPressed(KEY_R)) {
+                set_gamestate(&gsi, GS_ADVANCED_DUNGEON);
+            }
+            break;
+        }
+        case GS_ADVANCED_DUNGEON: {
+            if (!gsi.init) {
+                // reset tilemap texture 
+                Texture2D texture_dungeon_floor_tilemap = LOAD_DESERT_TILES_TEXTURE();
+
+                // reset dungeon floor texture
+                UnloadRenderTexture(dungeon_texture);
+
+                map_data = generate_map(DUNGEON_PRESET_ADVANCED);
+                dungeon_texture = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
+
+                //for (int row = 0; row < map_data.rows; row++) {
+				BeginTextureMode(dungeon_texture);
+                for (int row = 0; row < map_data.rows; row++) {
+                    for (int col = 0; col < map_data.cols; col++) {
+                        switch (map_data.tiles[col][row]) {
+                        case TILE_FLOOR:
+                        case TILE_CORRIDOR:
+                        case TILE_ROOM_ENTRANCE: {
+                            DrawTextureRec(
+                                texture_dungeon_floor_tilemap,
+                                (Rectangle) {
+                                TILE_SIZE* GetRandomValue(0, 8), 0, TILE_SIZE, TILE_SIZE
+                            },
+                                (Vector2) {
+                                col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)
+                            }, WHITE);
+                            break;
+                        }
+                        default: {
+                            break;
+                        }
+                        }
+                    }
+                }
+				EndTextureMode();
 
                 UnloadTexture(texture_dungeon_floor_tilemap);
-                // generate floor
 
+                // items
                 nullify_all_items(&item_data);
                 spawn_items(
                     ITEM_SPILLEDCUP,
@@ -840,82 +932,6 @@ int main(void/*int argc, char* argv[]*/) {
                 zor->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
                 fantano->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
                 cyhar->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
-                printf("Init basic dungeon.\n");
-                gsi.init = true;
-            }
-            if (IsKeyPressed(KEY_R)) {
-                set_gamestate(&gsi, GS_ADVANCED_DUNGEON);
-            }
-            break;
-        }
-        case GS_ADVANCED_DUNGEON: {
-            if (!gsi.init) {
-                Texture2D texture_grass = LOAD_FOREST_GRASS_TILES_TEXTURE();
-                Texture2D texture_dirt = LOAD_FOREST_DIRT_TILES_TEXTURE();
-
-                // reset dungeon floor texture
-                UnloadRenderTexture(texture_dungeon_floor_tiles);
-
-                map_data = generate_map(DUNGEON_PRESET_ADVANCED);
-                texture_dungeon_floor_tiles = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
-
-                //for (int row = 0; row < map_data.rows; row++) {
-				BeginTextureMode(texture_dungeon_floor_tiles);
-				for (int row = 0; row < map_data.rows; row++) {
-					for (int col = 0; col < map_data.cols; col++) {
-                        switch (map_data.tiles[col][row]) {
-                        case TILE_FLOOR:
-                        case TILE_CORRIDOR:
-                        case TILE_ROOM_ENTRANCE: {
-                            DrawTextureRec(
-                                texture_grass,
-                                (Rectangle){0, TILE_SIZE * GetRandomValue(0, 8), TILE_SIZE, TILE_SIZE },
-                                (Vector2) {col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)}, WHITE);
-                            break;
-                        }
-                        case TILE_WALL:
-                            DrawTextureRec(
-                                texture_dirt,
-                                (Rectangle) {
-                                0, TILE_SIZE* GetRandomValue(0, 8), TILE_SIZE, TILE_SIZE},
-                                (Vector2) {
-                                col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)
-                            }, WHITE);
-                            break;
-                        default: {
-                            break;
-                        }
-                        }
-                    }
-                }
-				EndTextureMode();
-                UnloadTexture(texture_dirt);
-                UnloadTexture(texture_grass);
-                zor->is_moving = false;
-                zor->animation_state = IDLE;
-                zor->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
-                fantano->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
-                cyhar->position = find_random_empty_floor_tile(&map_data, &item_data, &entity_data);
-
-                nullify_all_items(&item_data);
-                spawn_items(
-                    ITEM_SPILLEDCUP,
-                    &item_data,
-                    &map_data,
-                    4, 7
-                );
-                spawn_items(
-                    ITEM_STICK,
-                    &item_data,
-                    &map_data,
-                    5, 12
-                );
-                spawn_items(
-                    ITEM_APPLE,
-                    &item_data,
-                    &map_data,
-                    4, 7
-                );
                 printf("Init advanced dungeon.\n");
                 gsi.init = true;
             }
@@ -965,7 +981,7 @@ int main(void/*int argc, char* argv[]*/) {
             // do rendering
             BeginDrawing();
             {
-                ClearBackground(DARKBROWN);
+                ClearBackground(BLACK);
 
                 DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
                 DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
@@ -973,67 +989,19 @@ int main(void/*int argc, char* argv[]*/) {
                 BeginMode2D(camera);
                 {
                     // render map
-					DrawTexture(texture_dungeon_floor_tiles.texture, 0,/* map_data.cols * -TILE_SIZE*/0, WHITE);
 
+					DrawTexture(dungeon_texture.texture, 0, 0, WHITE);
                     for (int row = 0; row < map_data.rows; row++) {
                         for (int col = 0; col < map_data.cols; col++) {
-							//Color clr = LIGHTGREEN;
-                            switch (map_data.tiles[col][row]) {
-                             case TILE_WALL: {
-                                break;
+							Color clr = LIGHTGREEN;
+                            if (IsKeyDown(KEY_SPACE) && map_data.tiles[(int)zor->position.x][(int)zor->position.y] == map_data.tiles[col][row]) {
+                                DrawRectangleLines(
+                                    col * TILE_SIZE,
+                                    row * TILE_SIZE,
+                                    TILE_SIZE,
+                                    TILE_SIZE,
+                                    BLACK_SEMI_TRANSPARENT);
                             }
-                             case TILE_ROOM_ENTRANCE: {
-                                 /*DrawRectangle(
-                                     col * TILE_SIZE,
-                                     row * TILE_SIZE,
-                                     TILE_SIZE,
-                                     TILE_SIZE,
-                                     LIGHTBLUE);*/
-                             }
-                            case TILE_FLOOR: {
-                                //clr = LIGHTBLUE;
-								/*DrawRectangle(
-									col * TILE_SIZE,
-									row * TILE_SIZE,
-									TILE_SIZE,
-									TILE_SIZE,
-									LIGHTBLUE);*/
-                            }
-							case TILE_CORRIDOR: {
-                                /*clr = LIGHTYELLOW;
-								DrawRectangle(
-									col * TILE_SIZE,
-									row * TILE_SIZE,
-									TILE_SIZE,
-									TILE_SIZE,
-									LIGHTYELLOW);*/
-								if (IsKeyDown(KEY_SPACE)) {
-									DrawRectangleLines(
-										col * TILE_SIZE,
-										row * TILE_SIZE,
-										TILE_SIZE,
-										TILE_SIZE,
-										BLACK_SEMI_TRANSPARENT);
-								}
-                                break;
-                            }
-                            case TILE_INVALID: {
-                                break;
-                            }
-                            default: {
-                                printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, map_data.tiles[col][row]);
-                                // printf("? ");
-                                break;
-                            }
-							}
-						    /*if (isInPathList(&pathList, (Point) { col, row })) {
-								DrawRectangle(
-								col * TILE_SIZE,
-								row * TILE_SIZE,
-								TILE_SIZE,
-								TILE_SIZE,
-								RED);
-							}*/
                         }
                     }
 ;
