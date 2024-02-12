@@ -17,7 +17,7 @@
 #include "pathfinding.h"
 
 void print_vector2(Vector2 vec) {
-    printf("Vector2: (%.2f, %.2f)\n", vec.x, vec.y);
+    printf("Vector2: (%.8f, %.8f)\n", vec.x, vec.y);
 }
 
 #define BLACK_SEMI_TRANSPARENT (Color){0, 0, 0, 128}
@@ -198,6 +198,12 @@ enum Direction vector_to_direction(Vector2 vector) {
     }
 }
 
+void set_entity_position(Entity* ent, Vector2 pos) {
+    ent->position = pos;
+    ent->original_position = pos;
+}
+
+
 Vector2 get_tile_infront_entity(Entity* ent) {
     return Vector2Add(ent->original_position, direction_to_vector2(ent->direction));
 }
@@ -242,21 +248,24 @@ void reset_entity_state(Entity* ent, bool use_turn) {
 		ent->n_turn++;
 }
 
-void move_entity_forward(Entity* en) {
-    const Vector2 movement = direction_to_vector2(en->direction);
-    const Vector2 targ = Vector2Add(en->original_position, movement);
+void move_entity_forward(Entity* ent) {
+    if (ent->state != MOVE) return;
 
-    float distance_to_target = Vector2Distance(en->position, targ);
+    const Vector2 movement = direction_to_vector2(ent->direction);
+    //const Vector2 normalized_movement = Vector2Normalize(movement); // Normalize the movement vector
+    const Vector2 targ = Vector2Add(ent->original_position, movement);
+
+    float distance_to_target = Vector2Distance(ent->position, targ);
 
     float max_move_distance = GetFrameTime() * GRID_MOVESPEED;
 
     if (max_move_distance >= distance_to_target) {
-        en->position = targ;
-        reset_entity_state(en, true);
+        ent->position = targ;
+        reset_entity_state(ent, true);
     }
     else {
-        en->position.x += movement.x * max_move_distance;
-        en->position.y += movement.y * max_move_distance;
+        ent->position.x += movement.x * max_move_distance;
+        ent->position.y += movement.y * max_move_distance;
     }
 }
 
@@ -279,45 +288,45 @@ void swap_entity_positions(Entity* ent1, Entity* ent2) {
     ent2->state = MOVE;
 }
 
-void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS], EntityData* entity_data) {
+void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], EntityData* entity_data) {
 
     // if no key is held, ensure that isMoving is set to false
-    if (en->state != IDLE) return;
+    if (ent->state != IDLE) return;
 
     bool should_move = false;
 
     if (IsKeyDown(KEY_S)) {
         if (IsKeyDown(KEY_A)) {
-            en->direction = DOWNLEFT;
+            ent->direction = DOWNLEFT;
         }
         else if (IsKeyDown(KEY_D)) {
-            en->direction = DOWNRIGHT;
+            ent->direction = DOWNRIGHT;
         }
         else {
-            en->direction = DOWN;
+            ent->direction = DOWN;
         }
         should_move = true;
     }
 
     if (IsKeyDown(KEY_W)) {
         if (IsKeyDown(KEY_A)) {
-            en->direction = UPLEFT;
+            ent->direction = UPLEFT;
         }
         else if (IsKeyDown(KEY_D)) {
-            en->direction = UPRIGHT;
+            ent->direction = UPRIGHT;
         }
         else {
-            en->direction = UP;
+            ent->direction = UP;
         }
         should_move = true;
     }
 
     if (IsKeyDown(KEY_A) && !IsKeyDown(KEY_W) && !IsKeyDown(KEY_S)) {
-        en->direction = LEFT;
+        ent->direction = LEFT;
         should_move = true;
     }
     else if (IsKeyDown(KEY_D) && !IsKeyDown(KEY_W) && !IsKeyDown(KEY_S)) {
-        en->direction = RIGHT;
+        ent->direction = RIGHT;
         should_move = true;
     }
 
@@ -326,21 +335,22 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS], E
     }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !should_move) {
-        en->state = ATTACK_MELEE;
-        en->animation.cur_frame = 0;
+        ent->state = ATTACK_MELEE;
+        ent->animation.cur_frame = 0;
     }
 
     // this may be a bit scuffed. unecessary extra checks here?
-    Vector2 movement = direction_to_vector2(en->direction);
+    Vector2 movement = direction_to_vector2(ent->direction);
     
-    if (!Vector2Equals((movement), (Vector2) { 0 }) && should_move) {
-        if (en->prevent_pickup)
-            en->prevent_pickup = false;
+    if (should_move) {
+        if (ent->prevent_pickup)
+            ent->prevent_pickup = false;
+
         // printf("MOVE!\n");
-        // printf("X: %2.0f -> %2.0f\n", en->position.x, en->position.x+1.0f);
-        // printf("Y: %2.0f -> %2.0f\n", en->position.y, en->position.y+1.0f);
-        Vector2 target_position = Vector2Add(en->original_position, movement);
-        // printf("Target: %2.5f, %2.5f\n", en->targetPosition.x, en->targetPosition.y);
+        // printf("X: %2.0f -> %2.0f\n", ent->position.x, ent->position.x+1.0f);
+        // printf("Y: %2.0f -> %2.0f\n", ent->position.y, ent->position.y+1.0f);
+        Vector2 target_position = Vector2Add(ent->original_position, movement);
+        // printf("Target: %2.5f, %2.5f\n", ent->targetPosition.x, ent->targetPosition.y);
         int i_targ_x = (int)target_position.x;
         int i_targ_y = (int)target_position.y;
         // printf("Target: %i, %i\n", i_targ_x, i_targ_y);
@@ -353,29 +363,29 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS], E
         //
         // diagonal block
         if (movement.x != 0.0f && movement.y != 0.0f) {
-            if (tiles[i_targ_x][(int)en->position.y] == TILE_WALL
-            ||  tiles[(int)en->position.x][i_targ_y] == TILE_WALL) {
-                reset_entity_state(en, false);
+            if (tiles[i_targ_x][(int)ent->position.y] == TILE_WALL
+            ||  tiles[(int)ent->position.x][i_targ_y] == TILE_WALL) {
+                reset_entity_state(ent, false);
                 return;
             }
         }
 
         // entity block/swap
         int swapi = -1;
-        if (entity_exists_on_tile(i_targ_x, i_targ_y, entity_data, en, &swapi, false)) {
+        if (entity_exists_on_tile(i_targ_x, i_targ_y, entity_data, ent, &swapi, false)) {
             //printf("Tried to walk on tile with entity\n");
             if (!entity_data->entities[swapi].can_swap_positions) {
-                /*en->should_move = false;
-                en->state = IDLE;*/
-                en->state = IDLE;
-                should_move = false;
-                reset_entity_state(en, false);
+                /*ent->should_move = false;
+                ent->state = IDLE;*/
+                //ent->state = IDLE;
+                //should_move = false;
+                reset_entity_state(ent, false);
                 return;
             }
             //else if (entity_data->entities[swapi].can_swap_positions) {
             //    swap_entity_positions(en, &entity_data->entities[swapi]);
-            //   /* en->should_move = false;
-            //    en->state = IDLE;*/
+            //   /* ent->should_move = false;
+            //    ent->state = IDLE;*/
             //    reset_entity_state(en, true);
             //    reset_entity_state(&entity_data->entities[swapi], true);
             //    return;
@@ -389,7 +399,7 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS], E
         switch (tiles[i_targ_x][i_targ_y]) {
             case TILE_WALL: {
                 // printf("Invalid movement.!\n");
-                reset_entity_state(en, false);
+                reset_entity_state(ent, false);
                 return;
                 break;
             }
@@ -397,8 +407,7 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS], E
             case TILE_CORRIDOR:
             case TILE_FLOOR: {
                 //reset_entty_state(en, false);
-                should_move = true;
-                en->state = MOVE;
+                ent->state = MOVE;
                 break;
             }
             default: {
@@ -409,38 +418,38 @@ void control_entity(Entity* en, const enum TileType tiles[MAX_COLS][MAX_ROWS], E
     }
 }
 
-bool move_entity_in_direction(Entity* en, enum Direction dir) {
+bool move_entity_in_direction(Entity* ent, enum Direction dir) {
     const Vector2 movement = direction_to_vector2(dir);
 
     float max_move_distance = GetFrameTime() * GRID_MOVESPEED;
 
-    float distance_to_target = Vector2Distance(en->position, movement);
+    float distance_to_target = Vector2Distance(ent->position, movement);
 
     if (max_move_distance > distance_to_target) {
         max_move_distance = distance_to_target;
     }
 
     if (max_move_distance >= distance_to_target) {
-        reset_entity_state(en, true);
+        reset_entity_state(ent, true);
         return true;
     }
     else {
-        en->position.x += movement.x * max_move_distance;
-        en->position.y += movement.y * max_move_distance;
+        ent->position.x += movement.x * max_move_distance;
+        ent->position.y += movement.y * max_move_distance;
     }
     return false;
 }
 
-void move_entity_freely(Entity* en) {
+void move_entity_freely(Entity* ent) {
     // move entity (no grid involved)
-    if (en->state != MOVE) return;
+    if (ent->state != MOVE) return;
 
-    Vector2 movement = direction_to_vector2(en->direction);
+    Vector2 movement = direction_to_vector2(ent->direction);
 
-    en->position.x += movement.x * GetFrameTime() * GRID_MOVESPEED;
-    en->position.y += movement.y * GetFrameTime() * GRID_MOVESPEED;
+    ent->position.x += movement.x * GetFrameTime() * GRID_MOVESPEED;
+    ent->position.y += movement.y * GetFrameTime() * GRID_MOVESPEED;
 
-    en->state = IDLE;
+    ent->state = IDLE;
 }
 
 void update_animation(Animation* anim) {
@@ -468,12 +477,12 @@ Vector2 position_to_grid_position(Vector2 pos) {
     return gridPos;
 }
 
-void render_entity(Entity* en) {
-    Vector2 grid_position = position_to_grid_position(en->position);
-    Vector2 grid_original_position = position_to_grid_position(en->original_position);
-    Vector2 grid_infront_position = position_to_grid_position(get_tile_infront_entity(en));
-    // printf("[%i,%i] -> [%i,%i]\n", (int)en->position.x, (int)en->position.y, (int)gridPosition.x, (int)gridPosition.y);
-    // printf("%i\n", en->animation.yOffset);
+void render_entity(Entity* ent) {
+    Vector2 grid_position = position_to_grid_position(ent->position);
+    Vector2 grid_original_position = position_to_grid_position(ent->original_position);
+    Vector2 grid_infront_position = position_to_grid_position(get_tile_infront_entity(ent));
+    // printf("[%i,%i] -> [%i,%i]\n", (int)ent->position.x, (int)ent->position.y, (int)gridPosition.x, (int)gridPosition.y);
+    // printf("%i\n", ent->animation.yOffset);
 
     // offset y
     DrawCircle(
@@ -500,10 +509,10 @@ void render_entity(Entity* en) {
     // DrawRectangleLines(
     //  gridPosition.x, gridPosition.y, SPRITE_SIZE, SPRITE_SIZE, BLACK);
     DrawTextureRec(
-        en->texture,
+        ent->texture,
         (Rectangle) {
-        en->animation.cur_frame* SPRITE_SIZE,
-            en->animation.y_offset + (en->direction * SPRITE_SIZE),
+        ent->animation.cur_frame* SPRITE_SIZE,
+            ent->animation.y_offset + (ent->direction * SPRITE_SIZE),
             SPRITE_SIZE,
             SPRITE_SIZE
     },
@@ -512,32 +521,30 @@ void render_entity(Entity* en) {
             );
 }
 
-void lunge_entity(Entity* en) {
+void lunge_entity(Entity* ent) {
 
-    if (Vector2Equals(en->original_position, (Vector2) { 0, 0 })) {
-        en->original_position = en->position;
-    }
-
-    const Vector2 movement = direction_to_vector2(en->direction);
+    const Vector2 movement = direction_to_vector2(ent->direction);
 
     float lunge_distance = 1.0f;
     float lunge_speed = 2.5f;
     float lunge_distance_this_frame = lunge_speed * GetFrameTime();
 
-    if (en->lunge_progress < lunge_distance / 2) {
-        en->position = Vector2Add(en->position, Vector2Scale(movement, lunge_distance_this_frame));
+    if (ent->lunge_progress < lunge_distance / 2) {
+        ent->position = Vector2Add(ent->position, Vector2Scale(movement, lunge_distance_this_frame));
     }
     else {
-        en->position = Vector2Subtract(en->position, Vector2Scale(movement, lunge_distance_this_frame));
+        ent->position = Vector2Subtract(ent->position, Vector2Scale(movement, lunge_distance_this_frame));
     }
 
-    en->lunge_progress += lunge_distance_this_frame;
+    ent->lunge_progress += lunge_distance_this_frame;
 
-    if (en->lunge_progress >= lunge_distance) {
-        en->lunge_progress = 0.0f;
-        en->state = IDLE;
-        en->position = en->original_position;
-        reset_entity_state(en, true);
+    if (ent->lunge_progress >= lunge_distance) {
+        ent->lunge_progress = 0.0f;
+        ent->state = IDLE;
+        //ent->position = (Vector2){ roundf(ent->position.x), roundf(ent->position.y) };
+        //ent->original_position = (Vector2){ roundf(ent->position.x), roundf(ent->position.y) };
+        ent->position = ent->original_position;
+        reset_entity_state(ent, true);
     }
 }
 
@@ -648,11 +655,6 @@ Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* it
         break;
 	}
 	return (Vector2) { col, row };
-}
-
-void set_entity_position(Entity* ent, Vector2 pos) {
-    ent->position = pos;
-    ent->original_position = pos;
 }
 
 void create_item_instance(Item item, ItemData* item_data) {
@@ -916,12 +918,21 @@ void generate_enchanted_groves_dungeon_texture(const MapData* map_data, RenderTe
     UnloadTexture(terrain_texture);
 }
 
-PathList find_path_between_entities(MapData* map_data, bool cut_corners, Entity* start_entity, Entity* target_entity) {
+//PathList find_path_between_entities(MapData* map_data, bool cut_corners, Entity* start_entity, Entity* target_entity) {
+//    PathList path_list = { .path = { 0 }, .length = 0 };
+//    //if (target_entity->state != IDLE) return path_list;
+//    Point start_point = { (int)start_entity->original_position.x, (int)start_entity->original_position.y };
+//    //Point target_point = { (int)target_entity->position.x, (int)target_entity->position.y };
+//    Point target_point = { (int)target_entity->original_position.x, (int)target_entity->original_position.y };
+//    aStarSearch(map_data, start_point, target_point, &path_list, cut_corners);
+//    return path_list;
+//}
+
+PathList find_path_between_entities(MapData* map_data, bool cut_corners, Vector2 start_pos, Vector2 end_pos) {
     PathList path_list = { .path = { 0 }, .length = 0 };
-    //if (target_entity->state != IDLE) return path_list;
-    Point start_point = { (int)start_entity->original_position.x, (int)start_entity->original_position.y };
-    //Point target_point = { (int)target_entity->position.x, (int)target_entity->position.y };
-    Point target_point = { (int)target_entity->original_position.x, (int)target_entity->original_position.y };
+    Point start_point = { (int)roundf(start_pos.x), (int)roundf(start_pos.y) };
+    Point target_point = { (int)roundf(end_pos.x), (int)roundf(end_pos.y) };
+
     aStarSearch(map_data, start_point, target_point, &path_list, cut_corners);
     return path_list;
 }
@@ -930,25 +941,33 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, MapData* map_dat
     //if (ent->is_moving) return;
     //if (target->is_moving) return;
 
-    PathList path_list = find_path_between_entities(map_data, false, ent, target);
-    //printf("Path len: %i\n", path_list.length);
+    Vector2 target_pos = target->original_position;
+    if (target->state == MOVE) {
+        target_pos = get_tile_infront_entity(target);
+    }
+    else if (target->state == IDLE) {
+		target_pos = target->position;
+    }
 
+    // Find the path between the entity and the target
+    PathList path_list = find_path_between_entities(map_data, false, ent->original_position, target_pos);
+
+    // If a path is found, move towards the target, otherwise attack if adjacent
     if (path_list.length >= 1) {
         Point next_p = path_list.path[path_list.length - 1];
         Vector2 next_v = (Vector2){ next_p.x, next_p.y };
         Vector2 movement = Vector2Subtract(next_v, ent->original_position);
-        //if (ent->state == IDLE && target->state == IDLE) {
-        //if (ent->state == IDLE)
-		ent->direction = vector_to_direction(movement);
-		ent->state = MOVE;
+        //if (map_data->tiles[(int)next_v.x][(int)next_v.y] != TILE_WALL) {
+            ent->direction = vector_to_direction(movement);
+            ent->state = MOVE;
+        //}
         //}
     }
     else {
-        // next to target
-        Vector2 movement = Vector2Subtract(target->original_position, ent->original_position);
-        //if (ent->state == IDLE && target->state == IDLE)
-		ent->direction = vector_to_direction(movement);
-        ent->state = ATTACK_MELEE;
+        // If next to target and it's this entity's turn, attack
+        Vector2 movement = Vector2Subtract(target_pos, ent->original_position);
+        ent->direction = vector_to_direction(movement);
+		ent->state = ATTACK_MELEE;
     }
 }
 
@@ -1020,22 +1039,22 @@ int main(void/*int argc, char* argv[]*/) {
 	});
 	cyhar = GET_LAST_ENTITY_REF();*/
 
-    /*create_entity_instance(&entity_data, (Entity) {
+    create_entity_instance(&entity_data, (Entity) {
         .ent_type = ENT_FLY,
         .texture = LOAD_FLY_TEXTURE(),
 		.animation = (Animation){ .n_frames = 10 },
         .health = 100,
         .can_swap_positions = false,
         .max_turns = 1
-    });*/
-    create_entity_instance(&entity_data, (Entity) {
+    });
+    /*create_entity_instance(&entity_data, (Entity) {
         .ent_type = ENT_FLY,
             .texture = LOAD_FLY_TEXTURE(),
             .animation = (Animation){ .n_frames = 10 },
             .health = 100,
             .can_swap_positions = false,
             .max_turns = 1
-    });
+    });*/
 
     ItemData item_data = (ItemData){.items = { 0 }, .item_counter = 0};
     nullify_all_items(&item_data);
@@ -1079,6 +1098,7 @@ int main(void/*int argc, char* argv[]*/) {
         case GS_INTRO_DUNGEON: {
             if (!gsi.init) {
 
+                cur_turn_entity_index = 0;
                 map_data = generate_map(DUNGEON_PRESET_BASIC);
                 generate_enchanted_groves_dungeon_texture(&map_data, &dungeon_texture);
 
@@ -1104,7 +1124,7 @@ int main(void/*int argc, char* argv[]*/) {
             if (!gsi.init) {
                 // reset tilemap texture 
                 Texture2D texture_dungeon_floor_tilemap = LOAD_DESERT_TILES_TEXTURE();
-
+                cur_turn_entity_index = 0;
                 // reset dungeon floor texture
                 UnloadRenderTexture(dungeon_texture);
 
@@ -1166,17 +1186,27 @@ int main(void/*int argc, char* argv[]*/) {
         if (IsKeyPressed(KEY_E) && zor->inventory_item_count > 0) {
             drop_item(zor->inventory_item_count - 1, zor, &item_data);
         }
-        // Process each entity's turn
-        printf("Turn for id %i\n", cur_turn_entity_index);
-        for (int i = 0; i < entity_data.entity_counter; i++) {
 
+
+        // Process each entity's turn
+        //printf("Turn for id %i\n", cur_turn_entity_index);
+        for (int i = 0; i < entity_data.entity_counter; i++) {
+            //printf("Doing %i\n", i);
             Entity* ent = &entity_data.entities[i];
+            printf("Entity %i position: ", i);
+            print_vector2(ent->position);
+
+            if (i != cur_turn_entity_index) continue;
 
             // not this entity's turn, skip
             if (i == 0) {
                 // Player's turn
                 if (cur_turn_entity_index == 0)
                     control_entity(zor, map_data.tiles, &entity_data);
+                else {
+                    zor->state = IDLE;
+                    reset_entity_state(zor, false);
+                }
             }
             else {
                 // NPC's turn
@@ -1189,68 +1219,85 @@ int main(void/*int argc, char* argv[]*/) {
                     break;
                 }
             }
-
-            if (i != cur_turn_entity_index) continue;
-
-            // move this ent
-            switch (ent->state) {
-            case IDLE: {
-                break;
-            }
-            case MOVE: {
-                move_entity_forward(ent);
-
-                // move succeeding ents
-                for (int ii = i + 1; ii < entity_data.entity_counter; ii++) {
-                    Entity* ent2 = &entity_data.entities[ii];
-
-                    printf("ent %i state = %i\n", ii, ent2->state);
-                    printf("Moving ent2\n");
-
-					ai_simple_follow_melee_attack(ent2, zor, &map_data);
-                    if (ent2->state != MOVE) break;
-
-					move_entity_forward(ent2);
-                    
-                    if (ent2->state == IDLE && ent2->n_turn >= ent2->max_turns) {
-                        cur_turn_entity_index++;
-                    }
-                }
-                break;
-            }
-            case ATTACK_MELEE:
-                lunge_entity(ent);
-                break;
-            default:
-                break;
-            }
-
-            if (ent->state == IDLE && ent->n_turn >= ent->max_turns) {
-                cur_turn_entity_index++;
-            }
         }
-        if (cur_turn_entity_index >= entity_data.entity_counter) {
+
+        //int i = cur_turn_entity_index;
+
+		// move this ent
+		Entity* ent = &entity_data.entities[cur_turn_entity_index];
+		switch (ent->state) {
+		case IDLE: {
+			break;
+		}
+		case MOVE: {
+			move_entity_forward(ent);
+
+			// move succeeding ents
+			for (int ii = cur_turn_entity_index + 1; ii < entity_data.entity_counter; ii++) {
+				Entity* ent2 = &entity_data.entities[ii];
+
+                if (ent2->state != IDLE) break;
+
+				printf("ent %i state = %i\n", ii, ent2->state);
+				printf("Moving ent2\n");
+
+				ai_simple_follow_melee_attack(ent2, zor, &map_data, cur_turn_entity_index, cur_turn_entity_index);
+				if (ent2->state != MOVE) break;
+
+				move_entity_forward(ent2);
+
+				if (ent2->state == IDLE && ent2->n_turn >= ent2->max_turns) {
+                    set_entity_position(ent2,
+                        (Vector2) {
+                        (int)(ent2->position.x), (int)(ent2->position.y)
+                    });
+					cur_turn_entity_index++;
+				}
+			}
+			break;
+		}
+		case ATTACK_MELEE:
+			lunge_entity(ent);
+			break;
+		default:
+			break;
+		}
+		if (ent->state == IDLE && ent->n_turn >= ent->max_turns) {
+            set_entity_position(ent,
+                (Vector2) {
+                (int)(ent->position.x), (int)(ent->position.y)
+            });
+			cur_turn_entity_index++;
+		}
+
+        printf("\n");
+        if (cur_turn_entity_index > entity_data.entity_counter - 1) {
             for (int i = 0; i < entity_data.entity_counter; i++) {
                 Entity* ent = &entity_data.entities[i];
                 reset_entity_state(ent, false);
+				if (ent->state == IDLE) {
+					set_entity_position(ent,
+						(Vector2) {
+						(int)(ent->position.x), (int)(ent->position.y)
+					});
+				}
                 ent->n_turn = 0;
-
             }
             cur_turn_entity_index = 0;
         }
-    
-        for (int i = 0; i < entity_data.entity_counter; i++) {
+
+		for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
             update_animation_state(ent);
         }
 
 		Vector2 cam_target = { 0 };
-		if (zor->state == ATTACK_MELEE) {
+		/*if (zor->state == ATTACK_MELEE) {
             cam_target = Vector2Multiply(zor->original_position, (Vector2) { TILE_SIZE, TILE_SIZE });
         }
-        else {
+        else {*/
 			cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
-        }
+        //}
         cam_target.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
         cam_target.y += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 4);
         camera.target = cam_target;

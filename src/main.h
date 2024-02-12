@@ -7,6 +7,7 @@
 
 #define TILE_SIZE 100
 
+// 4.0
 #define GRID_MOVESPEED 4.0f
 #define POSITION_THRESHOLD 0.05f
 
@@ -71,7 +72,6 @@ typedef struct {
     enum EntityState state;
     enum Direction direction;
     //bool should_move;
-    bool currently_moving;
     //Vector2 target_position;
     enum ItemType inventory[32];
     int inventory_item_count;
