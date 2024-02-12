@@ -1,7 +1,10 @@
 #include <stdio.h>
 
-#include "raylib.h"
+//#include "raylib.h"
 
+//#include "dungeon.h"
+
+#include "main.h"
 #include "dungeon.h"
 
 void print_map(int cols, int rows, enum TileType tiles[MAX_COLS][MAX_ROWS]) {

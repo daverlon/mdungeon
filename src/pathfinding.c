@@ -3,8 +3,7 @@
 #include <stdlib.h>
 // #include <math.h>
 
-#include "raymath.h"
-
+#include "main.h"
 #include "pathfinding.h"
 
 #define INT_MAX 99999

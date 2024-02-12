@@ -1,5 +1,7 @@
 #pragma once
 
+#include "main.h"
+
 #include "dungeon.h"
 
 #include "stdio.h"
