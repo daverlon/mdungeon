@@ -6,7 +6,7 @@ FOLDER_NAMES = [str(i) for i in range(8)]
 SPRITE_SIZE = 256
 # SPRITE_SIZE = 128
 
-FRAME_COUNT = 20
+FRAME_COUNT = 10
 
 def create_sprite_sheet(input_folder, output_path):
     # Get a list of all subfolders in the input folder
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     # input_folder = "path/to/your/tmp/folder"
     # output_path = "path/to/your/output/sprite_sheet.png"
     input_folder = "/tmp"
-    output_path = "./bin/res/sprite_dumps/zor_spritesheet_compressed.png"
+    output_path = "./bin/res/sprite_dumps/output.png"
 
     # use aseprite to concatenate sheets vertically
     create_sprite_sheet(input_folder, output_path)
