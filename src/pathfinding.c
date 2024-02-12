@@ -25,9 +25,28 @@ int calculateHValue(Point current, Point dest) {
     return abs(current.x - dest.x) + abs(current.y - dest.y);
 }
 
+//void tracePath(Node** nodeDetails, Point dest, PathList* pathList) {
+//    int row = dest.y;
+//    int col = dest.x;
+//
+//    while (!(nodeDetails[row][col].parent.x == col && nodeDetails[row][col].parent.y == row)) {
+//        pathList->length++;
+//        pathList->path = realloc(pathList->path, pathList->length * sizeof(Point));
+//        pathList->path[pathList->length - 1] = (Point){ col, row };
+//
+//        int tempRow = nodeDetails[row][col].parent.y;
+//        col = nodeDetails[row][col].parent.x;
+//        row = tempRow;
+//    }
+//
+//    pathList->length++;
+//    pathList->path = realloc(pathList->path, pathList->length * sizeof(Point));
+//    pathList->path[pathList->length - 1] = (Point){ col, row };
+//}
+
 void tracePath(Node** nodeDetails, Point dest, PathList* pathList) {
-    int row = dest.y;
-    int col = dest.x;
+    int row = nodeDetails[dest.y][dest.x].parent.y;
+    int col = nodeDetails[dest.y][dest.x].parent.x;
 
     while (!(nodeDetails[row][col].parent.x == col && nodeDetails[row][col].parent.y == row)) {
         pathList->length++;
@@ -38,11 +57,22 @@ void tracePath(Node** nodeDetails, Point dest, PathList* pathList) {
         col = nodeDetails[row][col].parent.x;
         row = tempRow;
     }
-
-    pathList->length++;
-    pathList->path = realloc(pathList->path, pathList->length * sizeof(Point));
-    pathList->path[pathList->length - 1] = (Point){ col, row };
 }
+
+//void tracePath(Node** nodeDetails, Point dest, PathList* pathList) {
+//    int row = nodeDetails[dest.y][dest.x].parent.y;
+//    int col = nodeDetails[dest.y][dest.x].parent.x;
+//
+//    while (!(nodeDetails[row][col].parent.x == col && nodeDetails[row][col].parent.y == row)) {
+//        pathList->length++;
+//        pathList->path = realloc(pathList->path, pathList->length * sizeof(Point));
+//        pathList->path[pathList->length - 1] = (Point){ col, row };
+//
+//        int tempRow = nodeDetails[row][col].parent.y;
+//        col = nodeDetails[row][col].parent.x;
+//        row = tempRow;
+//    }
+//}
 
 void freePathList(PathList* pathList) {
     free(pathList->path);
@@ -62,6 +92,7 @@ bool isInPathList(PathList* pathList, Point p) {
 // rewrite in snake_case
 
 void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners) {
+    //printf("%i, %i\n", src.x, src.y);
     if (!isValid(src, map->cols, map->rows) || !isValid(dest, map->cols, map->rows)) {
         printf("Invalid source or destination\n");
         return;
