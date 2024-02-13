@@ -222,22 +222,38 @@ bool item_exists_on_tile(int col, int row, const ItemData* item_data) {
     return false;
 }
 
-bool entity_exists_on_tile(int col, int row, const EntityData* entity_data, Entity* ignore, int* out, bool use_target_pos) {
+bool any_entity_exists_on_tile(int col, int row, const EntityData* entity_data, Entity* ignore, int* out) {
     Vector2 pos = (Vector2){ col, row };
     for (int i = 0; i < entity_data->entity_counter; i++) {
-        // should not need target position check?
-        // since the game will be turn based...
-        // this was a fix for the weird debug thing.
-        if (&entity_data->entities[i] == ignore) continue;
-        if (Vector2Equals(entity_data->entities[i].position, pos)) {
-		//|| Vector2Equals(entity_data->entities[i].original_position, pos)) {
-		//|| (use_target_pos && Vector2Equals(entity_data->entities[i].target_position, pos))) {
-            if (out != NULL)
-				*out = i;
+        Entity* ent = &entity_data->entities[i];
+
+        if (ignore != NULL && ent == ignore) continue;
+
+        Vector2 ent_target_position = get_tile_infront_entity(ent);
+        if (
+			     (ent->state == MOVE && Vector2Equals(ent_target_position, pos))
+              || (Vector2Equals(ent->original_position, pos))
+              ) {
+            if (out != NULL) {
+                *out = i;
+            }
             return true;
         }
+
     }
-    //printf("BLOCKED!\n");
+    return false;
+}
+
+bool entity_exists_on_tile(int col, int row, Entity* ent) {
+    Vector2 pos = (Vector2){ col, row };
+	Vector2 ent_target_position = get_tile_infront_entity(ent);
+	if (
+		/* (ent->state == IDLE && Vector2Equals(ent->original_position, pos)
+	  || */(ent->state == MOVE && Vector2Equals(ent_target_position, pos)
+		  || (Vector2Equals(ent->original_position, pos))
+		  )) {
+		return true;
+	}
     return false;
 }
 
@@ -249,7 +265,7 @@ void reset_entity_state(Entity* ent, bool use_turn) {
 }
 
 void move_entity_forward(Entity* ent) {
-    if (ent->state != MOVE) return;
+    //if (ent->state != MOVE) return;
 
     const Vector2 movement = direction_to_vector2(ent->direction);
     //const Vector2 normalized_movement = Vector2Normalize(movement); // Normalize the movement vector
@@ -937,9 +953,11 @@ PathList find_path_between_entities(MapData* map_data, bool cut_corners, Vector2
     return path_list;
 }
 
-void ai_simple_follow_melee_attack(Entity* ent, Entity* target, MapData* map_data) {
+void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* entity_data, MapData* map_data) {
     //if (ent->is_moving) return;
     //if (target->is_moving) return;
+    
+    // calculate next move state
 
     Vector2 target_pos = target->original_position;
     if (target->state == MOVE) {
@@ -957,11 +975,16 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, MapData* map_dat
         Point next_p = path_list.path[path_list.length - 1];
         Vector2 next_v = (Vector2){ next_p.x, next_p.y };
         Vector2 movement = Vector2Subtract(next_v, ent->original_position);
-        //if (map_data->tiles[(int)next_v.x][(int)next_v.y] != TILE_WALL) {
-            ent->direction = vector_to_direction(movement);
+
+		ent->direction = vector_to_direction(movement);
+
+        if (any_entity_exists_on_tile(next_v.x, next_v.y, entity_data, ent, NULL)
+            && !entity_exists_on_tile(next_v.x, next_v.y, target)) {
+            ent->state = SKIP_TURN;
+        }
+        else {
             ent->state = MOVE;
-        //}
-        //}
+        }
     }
     else {
         // If next to target and it's this entity's turn, attack
@@ -983,6 +1006,59 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, MapData* map_dat
 //        break;
 //    }
 //}
+
+void entity_think(Entity* ent, Entity* player , MapData* map_data, EntityData* entity_data) {
+    // player is usually entity index 0
+    if (ent == player) {
+        // get player next action
+        control_entity(ent, map_data->tiles, &entity_data);
+    }
+    else {
+        switch (ent->ent_type) {
+        case ENT_FLY: {
+            ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+}
+
+bool entity_finished_turn(Entity* ent) {
+    return (ent->state == IDLE && ent->n_turn >= ent->max_turns);
+}
+
+bool async_moving_entity_exists(EntityData* entity_data) {
+    for (int i = 0; i < entity_data->entity_counter; i++) {
+        if (entity_data->entities[i].async_move)
+            return true;
+    }
+    return false;
+}
+
+void process_entity_state(Entity* ent) {
+    switch (ent->state) {
+    case IDLE: {
+        // not really supposed to trigger here
+        break;
+    }
+    case SKIP_TURN: {
+        //reset_entity_state(ent, true);
+        break;
+    }
+    case MOVE: {
+        move_entity_forward(ent);
+        break;
+    }
+    case ATTACK_MELEE: {
+        lunge_entity(ent);
+        break;
+    }
+    default:
+        break;
+    }
+}
 
 int main(void/*int argc, char* argv[]*/) {
 
@@ -1047,14 +1123,14 @@ int main(void/*int argc, char* argv[]*/) {
         .can_swap_positions = false,
         .max_turns = 1
     });
-    /*create_entity_instance(&entity_data, (Entity) {
+    create_entity_instance(&entity_data, (Entity) {
         .ent_type = ENT_FLY,
             .texture = LOAD_FLY_TEXTURE(),
             .animation = (Animation){ .n_frames = 10 },
             .health = 100,
             .can_swap_positions = false,
             .max_turns = 1
-    });*/
+    });
 
     ItemData item_data = (ItemData){.items = { 0 }, .item_counter = 0};
     nullify_all_items(&item_data);
@@ -1071,7 +1147,6 @@ int main(void/*int argc, char* argv[]*/) {
 	/*int async_move_ents[MAX_INSTANCES];
 	int async_move_ents_counter = 0;*/
     int cur_turn_entity_index = 0;
-    bool allow_async_turn = false;
 
     // main loop
     while (!WindowShouldClose()) {
@@ -1179,6 +1254,7 @@ int main(void/*int argc, char* argv[]*/) {
         }
         default: {
             printf("Gamestate: %i\n", gsi.game_state);
+
             printf("Error: default case for gamestate?\n");
             break;
         }
@@ -1187,104 +1263,80 @@ int main(void/*int argc, char* argv[]*/) {
             drop_item(zor->inventory_item_count - 1, zor, &item_data);
         }
 
+        // ================================================================== //
 
-        // Process each entity's turn
-        //printf("Turn for id %i\n", cur_turn_entity_index);
-        for (int i = 0; i < entity_data.entity_counter; i++) {
-            //printf("Doing %i\n", i);
-            Entity* ent = &entity_data.entities[i];
-            printf("Entity %i position: ", i);
-            print_vector2(ent->position);
+        //printf("Cur ent turn: %i\n", cur_turn_entity_index);
 
-            if (i != cur_turn_entity_index) continue;
+        // process entities who are async moving
+        if (async_moving_entity_exists(&entity_data)) {
 
-            // not this entity's turn, skip
-            if (i == 0) {
-                // Player's turn
-                if (cur_turn_entity_index == 0)
-                    control_entity(zor, map_data.tiles, &entity_data);
-                else {
-                    zor->state = IDLE;
-                    reset_entity_state(zor, false);
-                }
-            }
-            else {
-                // NPC's turn
-                switch (ent->ent_type) {
-                case ENT_FLY: {
-                    ai_simple_follow_melee_attack(ent, zor, &map_data);
-                    break;
-                }
-                default:
-                    break;
-                }
-            }
-        }
-
-        //int i = cur_turn_entity_index;
-
-		// move this ent
-		Entity* ent = &entity_data.entities[cur_turn_entity_index];
-		switch (ent->state) {
-		case IDLE: {
-			break;
-		}
-		case MOVE: {
-			move_entity_forward(ent);
-
-			// move succeeding ents
-			for (int ii = cur_turn_entity_index + 1; ii < entity_data.entity_counter; ii++) {
-				Entity* ent2 = &entity_data.entities[ii];
-
-                if (ent2->state != IDLE) break;
-
-				printf("ent %i state = %i\n", ii, ent2->state);
-				printf("Moving ent2\n");
-
-				ai_simple_follow_melee_attack(ent2, zor, &map_data, cur_turn_entity_index, cur_turn_entity_index);
-				if (ent2->state != MOVE) break;
-
-				move_entity_forward(ent2);
-
-				if (ent2->state == IDLE && ent2->n_turn >= ent2->max_turns) {
-                    set_entity_position(ent2,
-                        (Vector2) {
-                        (int)(ent2->position.x), (int)(ent2->position.y)
-                    });
-					cur_turn_entity_index++;
-				}
-			}
-			break;
-		}
-		case ATTACK_MELEE:
-			lunge_entity(ent);
-			break;
-		default:
-			break;
-		}
-		if (ent->state == IDLE && ent->n_turn >= ent->max_turns) {
-            set_entity_position(ent,
-                (Vector2) {
-                (int)(ent->position.x), (int)(ent->position.y)
-            });
-			cur_turn_entity_index++;
-		}
-
-        printf("\n");
-        if (cur_turn_entity_index > entity_data.entity_counter - 1) {
             for (int i = 0; i < entity_data.entity_counter; i++) {
                 Entity* ent = &entity_data.entities[i];
-                reset_entity_state(ent, false);
-				if (ent->state == IDLE) {
-					set_entity_position(ent,
-						(Vector2) {
-						(int)(ent->position.x), (int)(ent->position.y)
-					});
+
+                if (!ent->async_move) continue;
+
+				if (entity_finished_turn(ent)) {
+					// when an async entity has finished their turn
+					cur_turn_entity_index++;
+					ent->n_turn = 0;
+					if (cur_turn_entity_index >= entity_data.entity_counter) {
+						cur_turn_entity_index = 0;
+					}
+					ent->async_move = false;
 				}
-                ent->n_turn = 0;
+				else {
+					// if not, rethink turn and process it
+					if (ent->state == IDLE || ent->state == SKIP_TURN)
+						entity_think(ent, zor, &map_data, &entity_data);
+					process_entity_state(ent);
+				}
             }
-            cur_turn_entity_index = 0;
         }
+        else {
+            // no async moving entities exist currently
+
+            Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
+
+            entity_think(this_ent, zor, &map_data, &entity_data);
+
+            // check if async entities should exist for this turn
+            // and log them
+            if (this_ent->state == MOVE) {
+                for (int i = cur_turn_entity_index + 1; i < entity_data.entity_counter; i++) {
+                    Entity* ent = &entity_data.entities[i];
+					entity_think(ent, zor, &map_data, &entity_data);
+                    if (ent->state != MOVE && ent->state != SKIP_TURN) {
+                        break;
+                    }
+                    this_ent->async_move = true;
+                    ent->async_move = true;
+                }
+            }
+
+            // if there are none, process individual entity as normal
+            if (!async_moving_entity_exists(&entity_data)) {
+
+				Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
+
+                entity_think(this_ent, zor, &map_data, &entity_data);
+
+                process_entity_state(this_ent);
+
+				// entity finished turn?
+				if (entity_finished_turn(this_ent)) {
+					cur_turn_entity_index++;
+					this_ent->n_turn = 0;
+					if (cur_turn_entity_index >= entity_data.entity_counter) {
+						cur_turn_entity_index = 0;
+					}
+				}
+            }
+            else {
+                
+            }
+        }
+
+        // ================================================================== //
 
 		for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
@@ -1409,6 +1461,10 @@ int main(void/*int argc, char* argv[]*/) {
 
                             for (int e = 0; e < entity_data.entity_counter; e++) {
                                 Entity* ent = &entity_data.entities[e];
+                                Vector2 text_pos = position_to_grid_position(ent->position);
+                                char txt[8];
+                                sprintf_s(txt, 2, "%i", e);
+                                DrawText(txt, text_pos.x, text_pos.y, 24, WHITE);
                                 int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
                                 //DrawRectangle(x_pos, y_pos, 50, 50, RED);
                                 if (!rendered[e] && y_pos < lowest_y) {

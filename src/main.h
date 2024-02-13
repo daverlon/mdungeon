@@ -20,7 +20,8 @@
 enum EntityState {
     IDLE,
     MOVE,
-    ATTACK_MELEE
+    ATTACK_MELEE,
+    SKIP_TURN
 };
 
 enum ItemType {
@@ -70,6 +71,7 @@ typedef struct {
     Texture2D texture;
     Animation animation;
     enum EntityState state;
+    enum EntityState next_state;
     enum Direction direction;
     //bool should_move;
     //Vector2 target_position;
@@ -83,6 +85,7 @@ typedef struct {
     int health;
     int n_turn;
     int max_turns; // max turns per 'turn'
+    bool async_move;
     //bool finished_turn;
 } Entity;
 
