@@ -21,7 +21,7 @@ enum EntityState {
     IDLE,
     MOVE,
     ATTACK_MELEE,
-    SKIP_TURN
+    SKIP_TURN // react to other moves first?
 };
 
 enum ItemType {
@@ -86,6 +86,7 @@ typedef struct {
     int n_turn;
     int max_turns; // max turns per 'turn'
     bool async_move;
+    //bool rethink_move;
     //bool finished_turn;
 } Entity;
 

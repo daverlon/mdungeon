@@ -65,7 +65,7 @@ enum Direction {
     DOWNLEFT
 };
 
-void rotate_smooth(enum Direction target, enum Direction *dir) {
+void rotate_smooth(enum Direction target, enum Direction* dir) {
     int diff = (target - *dir + 8) % 8; // Calculate the shortest difference in direction
 
     if (diff == 0)
@@ -231,9 +231,9 @@ bool any_entity_exists_on_tile(int col, int row, const EntityData* entity_data, 
 
         Vector2 ent_target_position = get_tile_infront_entity(ent);
         if (
-			     (ent->state == MOVE && Vector2Equals(ent_target_position, pos))
-              || (Vector2Equals(ent->original_position, pos))
-              ) {
+            (ent->state == MOVE && Vector2Equals(ent_target_position, pos))
+            || (ent->state != MOVE && Vector2Equals(ent->original_position, pos))
+            ) {
             if (out != NULL) {
                 *out = i;
             }
@@ -246,14 +246,13 @@ bool any_entity_exists_on_tile(int col, int row, const EntityData* entity_data, 
 
 bool entity_exists_on_tile(int col, int row, Entity* ent) {
     Vector2 pos = (Vector2){ col, row };
-	Vector2 ent_target_position = get_tile_infront_entity(ent);
-	if (
-		/* (ent->state == IDLE && Vector2Equals(ent->original_position, pos)
-	  || */(ent->state == MOVE && Vector2Equals(ent_target_position, pos)
-		  || (Vector2Equals(ent->original_position, pos))
-		  )) {
-		return true;
-	}
+    Vector2 ent_target_position = get_tile_infront_entity(ent);
+    if (
+      (ent->state == MOVE && Vector2Equals(ent_target_position, pos))
+    || (ent->state != MOVE && Vector2Equals(ent->original_position, pos))
+    ) {
+        return true;
+    }
     return false;
 }
 
@@ -261,7 +260,7 @@ void reset_entity_state(Entity* ent, bool use_turn) {
     ent->state = IDLE;
     ent->original_position = ent->position;
     if (use_turn)
-		ent->n_turn++;
+        ent->n_turn++;
 }
 
 void move_entity_forward(Entity* ent) {
@@ -357,7 +356,7 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
 
     // this may be a bit scuffed. unecessary extra checks here?
     Vector2 movement = direction_to_vector2(ent->direction);
-    
+
     if (should_move) {
         if (ent->prevent_pickup)
             ent->prevent_pickup = false;
@@ -380,7 +379,7 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
         // diagonal block
         if (movement.x != 0.0f && movement.y != 0.0f) {
             if (tiles[i_targ_x][(int)ent->position.y] == TILE_WALL
-            ||  tiles[(int)ent->position.x][i_targ_y] == TILE_WALL) {
+                || tiles[(int)ent->position.x][i_targ_y] == TILE_WALL) {
                 reset_entity_state(ent, false);
                 return;
             }
@@ -413,23 +412,23 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
         }
 
         switch (tiles[i_targ_x][i_targ_y]) {
-            case TILE_WALL: {
-                // printf("Invalid movement.!\n");
-                reset_entity_state(ent, false);
-                return;
-                break;
-            }
-            case TILE_ROOM_ENTRANCE:
-            case TILE_CORRIDOR:
-            case TILE_FLOOR: {
-                //reset_entty_state(en, false);
-                ent->state = MOVE;
-                break;
-            }
-            default: {
-                printf("Error (MOVEMENT) invalid tile detected?: %i\n", tiles[i_targ_x][i_targ_y]);
-                break;
-            }
+        case TILE_WALL: {
+            // printf("Invalid movement.!\n");
+            reset_entity_state(ent, false);
+            return;
+            break;
+        }
+        case TILE_ROOM_ENTRANCE:
+        case TILE_CORRIDOR:
+        case TILE_FLOOR: {
+            //reset_entty_state(en, false);
+            ent->state = MOVE;
+            break;
+        }
+        default: {
+            printf("Error (MOVEMENT) invalid tile detected?: %i\n", tiles[i_targ_x][i_targ_y]);
+            break;
+        }
         }
     }
 }
@@ -472,14 +471,14 @@ void update_animation(Animation* anim) {
     anim->cur_frame_time += GetFrameTime();
 
     // calculate the number of frames to advance based on elapsed time
-	int frames_to_advance = (int)(anim->cur_frame_time / anim->max_frame_time);
-	anim->cur_frame_time -= frames_to_advance * anim->max_frame_time;
+    int frames_to_advance = (int)(anim->cur_frame_time / anim->max_frame_time);
+    anim->cur_frame_time -= frames_to_advance * anim->max_frame_time;
 
-	anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
+    anim->cur_frame = (anim->cur_frame + frames_to_advance) % anim->n_frames;
 
-	if (anim->cur_frame % anim->n_frames == 0) {
-		anim->cur_frame = 0;
-	}
+    if (anim->cur_frame % anim->n_frames == 0) {
+        anim->cur_frame = 0;
+    }
 }
 
 Vector2 position_to_grid_position(Vector2 pos) {
@@ -568,40 +567,40 @@ void update_animation_state(Entity* ent) {
     switch (ent->ent_type) {
     case ENT_ZOR: {
         switch (ent->state) {
-			case IDLE: {
-				ent->animation.max_frame_time = 0.02f;
-				ent->animation.y_offset = 0;
-				break;
-			}
-			case MOVE: {
-				ent->animation.max_frame_time = 0.030f;
-				ent->animation.y_offset = 2048;
-				break;
-			}
-			case ATTACK_MELEE: {
-				ent->animation.max_frame_time = 0.017f;
-				ent->animation.y_offset = 2048 + 2048;
-				break;
-			}
-			default: {
-				break;
-			}
+        case IDLE: {
+            ent->animation.max_frame_time = 0.02f;
+            ent->animation.y_offset = 0;
+            break;
+        }
+        case MOVE: {
+            ent->animation.max_frame_time = 0.030f;
+            ent->animation.y_offset = 2048;
+            break;
+        }
+        case ATTACK_MELEE: {
+            ent->animation.max_frame_time = 0.017f;
+            ent->animation.y_offset = 2048 + 2048;
+            break;
+        }
+        default: {
+            break;
+        }
         }
         break;
-	}
+    }
     case ENT_FANTANO: {
         switch (ent->state) {
-			case IDLE: {
-				ent->animation.max_frame_time = 0.017f;
-				ent->animation.y_offset = 0;
-				break;
-			}
-			case ATTACK_MELEE: {
-				break;
-			}
-			default: {
-				break;
-			}
+        case IDLE: {
+            ent->animation.max_frame_time = 0.017f;
+            ent->animation.y_offset = 0;
+            break;
+        }
+        case ATTACK_MELEE: {
+            break;
+        }
+        default: {
+            break;
+        }
         }
         break;
     }
@@ -623,26 +622,26 @@ void update_animation_state(Entity* ent) {
     }
     case ENT_FLY: {
         switch (ent->state) {
-			case IDLE: {
-				ent->animation.max_frame_time = 0.037f;
-				ent->animation.y_offset = 0;
-				break;
-			}
-			case ATTACK_MELEE: {
-				ent->animation.max_frame_time = 0.010f;
-				ent->animation.y_offset = 2048;
-				break;
-			}
-			default: {
-				break;
-			}
-		}
+        case IDLE: {
+            ent->animation.max_frame_time = 0.037f;
+            ent->animation.y_offset = 0;
+            break;
+        }
+        case ATTACK_MELEE: {
+            ent->animation.max_frame_time = 0.010f;
+            ent->animation.y_offset = 2048;
+            break;
+        }
+        default: {
+            break;
+        }
+        }
         break;
     }
     default:
         break;
     }
-	update_animation(&ent->animation);
+    update_animation(&ent->animation);
 }
 
 Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* item_data, const EntityData* entity_data) {
@@ -651,11 +650,11 @@ Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* it
 
     while (1) {
         // choose tile
-		col = GetRandomValue(0, MAX_COLS);
-		row = GetRandomValue(0, MAX_ROWS);
+        col = GetRandomValue(0, MAX_COLS);
+        row = GetRandomValue(0, MAX_ROWS);
 
         // check if tile is TILE_FLOOR
-        if (map_data->tiles[col][row] != TILE_FLOOR) 
+        if (map_data->tiles[col][row] != TILE_FLOOR)
             continue;
 
         // check if item exists on tile
@@ -669,8 +668,8 @@ Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* it
         // check if entity exists on tile
 
         break;
-	}
-	return (Vector2) { col, row };
+    }
+    return (Vector2) { col, row };
 }
 
 void create_item_instance(Item item, ItemData* item_data) {
@@ -737,7 +736,7 @@ void spawn_items(enum ItemType item_type, ItemData* item_data, const MapData* ma
 
 void nullify_all_items(ItemData* item_data) {
     for (int i = 0; i < MAX_INSTANCES; i++) {
-        item_data->items[i] = (Item){ ITEM_NOTHING, (Vector2) { 0, 0 }};
+        item_data->items[i] = (Item){ ITEM_NOTHING, (Vector2) { 0, 0 } };
     }
     item_data->item_counter = 0;
     printf("Set every item to ITEM_NOTHING\n");
@@ -765,7 +764,7 @@ void pickup_item(const int index, ItemData* item_data, Entity* entity) {
 
 void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
     if (!entity->prevent_pickup) {
-		// entity can pickup item
+        // entity can pickup item
         for (int i = 0; i < item_data->item_counter; i++) {
             Item* item = &item_data->items[i];
             // item exists on same tile as entity
@@ -773,7 +772,7 @@ void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
                 pickup_item(i, item_data, entity);
             }
         }
-	}
+    }
 }
 
 void delete_item_from_entity_inventory(const int index, Entity* entity) {
@@ -840,7 +839,7 @@ void render_player_inventory(Entity* player) {
     }
 }
 
-void set_gamestate(GameStateInfo *gsi, enum GameState state) {
+void set_gamestate(GameStateInfo* gsi, enum GameState state) {
     printf("Setting gamestate %i ---> %i.\n", gsi->game_state, state);
     gsi->game_state = state;
     gsi->init = false;
@@ -867,15 +866,15 @@ void remove_entity(const int index, EntityData* entity_data) {
 }
 
 void generate_enchanted_groves_dungeon_texture(const MapData* map_data, RenderTexture2D* dungeon_texture/*DungeonTexture* dungeon_texture*/) {
-	Texture2D floor_texture = LOAD_FOREST_GRASS_TILES_TEXTURE();
-	Texture2D terrain_texture = LOAD_FOREST_TERRAIN_TEXTURE();
+    Texture2D floor_texture = LOAD_FOREST_GRASS_TILES_TEXTURE();
+    Texture2D terrain_texture = LOAD_FOREST_TERRAIN_TEXTURE();
     Texture2D active_floor_texture = LOAD_FOREST_ACTIVE_GRASS();
 
-	UnloadRenderTexture(*dungeon_texture);
-	*dungeon_texture = LoadRenderTexture(map_data->cols * TILE_SIZE, map_data->rows * TILE_SIZE);
+    UnloadRenderTexture(*dungeon_texture);
+    *dungeon_texture = LoadRenderTexture(map_data->cols * TILE_SIZE, map_data->rows * TILE_SIZE);
 
     // render to floor layer
-	BeginTextureMode(*dungeon_texture);
+    BeginTextureMode(*dungeon_texture);
     {
         // generate floor layer
         for (int row = 0; row < map_data->rows; row++) {
@@ -887,9 +886,13 @@ void generate_enchanted_groves_dungeon_texture(const MapData* map_data, RenderTe
                 case TILE_FLOOR: {
                     DrawTextureRec(
                         floor_texture,
-                        (Rectangle) {TILE_SIZE* GetRandomValue(0, 12), 0, TILE_SIZE, -TILE_SIZE},
-                        (Vector2) {col* TILE_SIZE, ((map_data->rows - row - 1) * TILE_SIZE)}, 
-                        WHITE);
+                        (Rectangle) {
+                        TILE_SIZE* GetRandomValue(0, 12), 0, TILE_SIZE, -TILE_SIZE
+                    },
+                        (Vector2) {
+                        col* TILE_SIZE, ((map_data->rows - row - 1) * TILE_SIZE)
+                    },
+                            WHITE);
                     bool floor_grass = GetRandomValue(0, 13) == 0;
                     if (floor_grass) {
                         /*DrawTextureRec(
@@ -927,7 +930,7 @@ void generate_enchanted_groves_dungeon_texture(const MapData* map_data, RenderTe
             }
         }
     }
-	EndTextureMode();
+    EndTextureMode();
 
     UnloadTexture(active_floor_texture);
     UnloadTexture(floor_texture);
@@ -956,7 +959,7 @@ PathList find_path_between_entities(MapData* map_data, bool cut_corners, Vector2
 void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* entity_data, MapData* map_data) {
     //if (ent->is_moving) return;
     //if (target->is_moving) return;
-    
+
     // calculate next move state
 
     Vector2 target_pos = target->original_position;
@@ -964,7 +967,7 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         target_pos = get_tile_infront_entity(target);
     }
     else if (target->state == IDLE) {
-		target_pos = target->position;
+        target_pos = target->position;
     }
 
     // Find the path between the entity and the target
@@ -976,7 +979,7 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         Vector2 next_v = (Vector2){ next_p.x, next_p.y };
         Vector2 movement = Vector2Subtract(next_v, ent->original_position);
 
-		ent->direction = vector_to_direction(movement);
+        ent->direction = vector_to_direction(movement);
 
         if (any_entity_exists_on_tile(next_v.x, next_v.y, entity_data, ent, NULL)
             && !entity_exists_on_tile(next_v.x, next_v.y, target)) {
@@ -990,7 +993,7 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         // If next to target and it's this entity's turn, attack
         Vector2 movement = Vector2Subtract(target_pos, ent->original_position);
         ent->direction = vector_to_direction(movement);
-		ent->state = ATTACK_MELEE;
+        ent->state = ATTACK_MELEE;
     }
 }
 
@@ -1007,7 +1010,7 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
 //    }
 //}
 
-void entity_think(Entity* ent, Entity* player , MapData* map_data, EntityData* entity_data) {
+void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* entity_data) {
     // player is usually entity index 0
     if (ent == player) {
         // get player next action
@@ -1044,7 +1047,7 @@ void process_entity_state(Entity* ent) {
         break;
     }
     case SKIP_TURN: {
-        //reset_entity_state(ent, true);
+        reset_entity_state(ent, true);
         break;
     }
     case MOVE: {
@@ -1088,40 +1091,40 @@ int main(void/*int argc, char* argv[]*/) {
     Entity* cyhar = { 0 };
 
     // init the entities
-	create_entity_instance(&entity_data, (Entity) {
-		.ent_type = ENT_ZOR,
-		.texture = LOAD_ZOR_TEXTURE(),
-		.animation = (Animation){ .n_frames = 20 },
-        .health = 100,
-        .max_turns = 1
-	});
+    create_entity_instance(&entity_data, (Entity) {
+        .ent_type = ENT_ZOR,
+            .texture = LOAD_ZOR_TEXTURE(),
+            .animation = (Animation){ .n_frames = 20 },
+            .health = 100,
+            .max_turns = 1
+    });
     zor = GET_LAST_ENTITY_REF();
 
-	/*create_entity_instance(&entity_data, (Entity) {
+    /*create_entity_instance(&entity_data, (Entity) {
         .ent_type = ENT_FANTANO,
         .texture = LOAD_FANTANO_TEXTURE(),
-		.can_swap_positions = true,
-		.animation = (Animation){ .n_frames = 20 },
+        .can_swap_positions = true,
+        .animation = (Animation){ .n_frames = 20 },
         .health = 100,
         .can_swap_positions = true
-	});
-	fantano = GET_LAST_ENTITY_REF();*/
+    });
+    fantano = GET_LAST_ENTITY_REF();*/
 
-	/*create_entity_instance(&entity_data, (Entity) {
+    /*create_entity_instance(&entity_data, (Entity) {
         .ent_type = ENT_CYHAR,
-		.texture = LOAD_CYHAR_TEXTURE(),
-		.animation = (Animation){ .n_frames = 20 },
+        .texture = LOAD_CYHAR_TEXTURE(),
+        .animation = (Animation){ .n_frames = 20 },
         .health = 100
-	});
-	cyhar = GET_LAST_ENTITY_REF();*/
+    });
+    cyhar = GET_LAST_ENTITY_REF();*/
 
     create_entity_instance(&entity_data, (Entity) {
         .ent_type = ENT_FLY,
-        .texture = LOAD_FLY_TEXTURE(),
-		.animation = (Animation){ .n_frames = 10 },
-        .health = 100,
-        .can_swap_positions = false,
-        .max_turns = 1
+            .texture = LOAD_FLY_TEXTURE(),
+            .animation = (Animation){ .n_frames = 10 },
+            .health = 100,
+            .can_swap_positions = false,
+            .max_turns = 1
     });
     create_entity_instance(&entity_data, (Entity) {
         .ent_type = ENT_FLY,
@@ -1132,20 +1135,20 @@ int main(void/*int argc, char* argv[]*/) {
             .max_turns = 1
     });
 
-    ItemData item_data = (ItemData){.items = { 0 }, .item_counter = 0};
+    ItemData item_data = (ItemData){ .items = { 0 }, .item_counter = 0 };
     nullify_all_items(&item_data);
 
     // todo: large texture containing multiple item sprites?
     Texture2D texture_item_spilledcup = LOAD_SPILLEDCUP_TEXTURE();
     Texture2D texture_item_stick = LOAD_STICK_TEXTURE();
     Texture2D texture_item_apple = LOAD_APPLE_TEXTURE();
-    
+
     RenderTexture2D dungeon_texture = { 0 };
 
     MapData map_data = { 0 };
 
-	/*int async_move_ents[MAX_INSTANCES];
-	int async_move_ents_counter = 0;*/
+    /*int async_move_ents[MAX_INSTANCES];
+    int async_move_ents_counter = 0;*/
     int cur_turn_entity_index = 0;
 
     // main loop
@@ -1265,7 +1268,11 @@ int main(void/*int argc, char* argv[]*/) {
 
         // ================================================================== //
 
-        //printf("Cur ent turn: %i\n", cur_turn_entity_index);
+        printf("\nEntity turn id: %i\n", cur_turn_entity_index);
+        for (int i = 0; i < entity_data.entity_counter; i++) {
+            Entity* ent = &entity_data.entities[i];
+            printf("Entity %i state %i async %i\n", i, ent->state, (int)ent->async_move);
+        }
 
         // process entities who are async moving
         if (async_moving_entity_exists(&entity_data)) {
@@ -1275,21 +1282,26 @@ int main(void/*int argc, char* argv[]*/) {
 
                 if (!ent->async_move) continue;
 
-				if (entity_finished_turn(ent)) {
-					// when an async entity has finished their turn
-					cur_turn_entity_index++;
-					ent->n_turn = 0;
-					if (cur_turn_entity_index >= entity_data.entity_counter) {
-						cur_turn_entity_index = 0;
-					}
-					ent->async_move = false;
-				}
-				else {
-					// if not, rethink turn and process it
-					if (ent->state == IDLE || ent->state == SKIP_TURN)
-						entity_think(ent, zor, &map_data, &entity_data);
+                if (entity_finished_turn(ent)) {
+                    // when an async entity has finished their turn
+                    cur_turn_entity_index++;
+                    ent->n_turn = 0;
+                    if (cur_turn_entity_index >= entity_data.entity_counter) {
+                        cur_turn_entity_index = 0;
+                    }
+                    ent->async_move = false;
+                }
+                else {
+                    // if not, rethink turn and process it
+                    if (ent->state == IDLE || ent->state == SKIP_TURN) {
+                        entity_think(ent, zor, &map_data, &entity_data);
+                        // should still skip?
+                        //if (ent->state == SKIP_TURN) {
+                        //    continue;
+                        //}
+                    }
 					process_entity_state(ent);
-				}
+                }
             }
         }
         else {
@@ -1304,7 +1316,7 @@ int main(void/*int argc, char* argv[]*/) {
             if (this_ent->state == MOVE) {
                 for (int i = cur_turn_entity_index + 1; i < entity_data.entity_counter; i++) {
                     Entity* ent = &entity_data.entities[i];
-					entity_think(ent, zor, &map_data, &entity_data);
+                    entity_think(ent, zor, &map_data, &entity_data);
                     if (ent->state != MOVE && ent->state != SKIP_TURN) {
                         break;
                     }
@@ -1316,39 +1328,40 @@ int main(void/*int argc, char* argv[]*/) {
             // if there are none, process individual entity as normal
             if (!async_moving_entity_exists(&entity_data)) {
 
-				Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
+                Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
 
                 entity_think(this_ent, zor, &map_data, &entity_data);
 
                 process_entity_state(this_ent);
 
-				// entity finished turn?
-				if (entity_finished_turn(this_ent)) {
-					cur_turn_entity_index++;
-					this_ent->n_turn = 0;
-					if (cur_turn_entity_index >= entity_data.entity_counter) {
-						cur_turn_entity_index = 0;
-					}
-				}
+                // entity finished turn?
+                if (entity_finished_turn(this_ent)) {
+                    cur_turn_entity_index++;
+                    this_ent->n_turn = 0;
+                    if (cur_turn_entity_index >= entity_data.entity_counter) {
+                        cur_turn_entity_index = 0;
+                    }
+                }
+
             }
             else {
-                
+
             }
         }
 
         // ================================================================== //
 
-		for (int i = 0; i < entity_data.entity_counter; i++) {
+        for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
             update_animation_state(ent);
         }
 
-		Vector2 cam_target = { 0 };
-		/*if (zor->state == ATTACK_MELEE) {
+        Vector2 cam_target = { 0 };
+        /*if (zor->state == ATTACK_MELEE) {
             cam_target = Vector2Multiply(zor->original_position, (Vector2) { TILE_SIZE, TILE_SIZE });
         }
         else {*/
-			cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+        cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
         //}
         cam_target.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
         cam_target.y += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 4);
@@ -1357,43 +1370,43 @@ int main(void/*int argc, char* argv[]*/) {
         scan_items_for_pickup(&item_data, zor);
         //scan_items_for_pickup(&item_data, fantano);
 
-		// echo map layout to console
-		if (IsKeyPressed(KEY_V)) {
-			for (int row = 0; row < map_data.rows; row++) {
-				for (int col = 0; col < map_data.cols; col++) {
-					switch (map_data.tiles[col][row]) {
-					case TILE_WALL: {
-						printf("~ ");
-						break;
-					}
-					case TILE_CORRIDOR:
-						printf("C ");
-					case TILE_FLOOR: {
+        // echo map layout to console
+        if (IsKeyPressed(KEY_V)) {
+            for (int row = 0; row < map_data.rows; row++) {
+                for (int col = 0; col < map_data.cols; col++) {
+                    switch (map_data.tiles[col][row]) {
+                    case TILE_WALL: {
+                        printf("~ ");
+                        break;
+                    }
+                    case TILE_CORRIDOR:
+                        printf("C ");
+                    case TILE_FLOOR: {
 
-						//if (inList(&path, (Node){col, row})) {
-						/*if (isInPathList(&pathList, (Point) { col, row })) {
-							printf("P ");
-						}*/
-						//else
-							printf("X ");
-						break;
-					}
-					case TILE_INVALID: {
-						break;
-					}
-					case TILE_ROOM_ENTRANCE: {
-						break;
-					}
-					default: {
-						printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, map_data.tiles[col][row]);
-						// printf("? ");
-						break;
-					}
-					}
-				}
-				printf("\n");
-			}
-		}
+                        //if (inList(&path, (Node){col, row})) {
+                        /*if (isInPathList(&pathList, (Point) { col, row })) {
+                            printf("P ");
+                        }*/
+                        //else
+                        printf("X ");
+                        break;
+                    }
+                    case TILE_INVALID: {
+                        break;
+                    }
+                    case TILE_ROOM_ENTRANCE: {
+                        break;
+                    }
+                    default: {
+                        printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, map_data.tiles[col][row]);
+                        // printf("? ");
+                        break;
+                    }
+                    }
+                }
+                printf("\n");
+            }
+        }
 
         // render
         {
@@ -1409,11 +1422,11 @@ int main(void/*int argc, char* argv[]*/) {
                 BeginMode2D(camera);
                 {
                     // render map
-					DrawTexture(dungeon_texture.texture, 0, 0, WHITE);
+                    DrawTexture(dungeon_texture.texture, 0, 0, WHITE);
                     for (int row = 0; row < map_data.rows; row++) {
                         for (int col = 0; col < map_data.cols; col++) {
-							Color clr = LIGHTGREEN;
-                            if (IsKeyDown(KEY_SPACE) 
+                            Color clr = LIGHTGREEN;
+                            if (IsKeyDown(KEY_SPACE)
                                 //&& map_data.tiles[(int)zor->position.x][(int)zor->position.y] == map_data.tiles[col][row]) {
                                 && map_data.tiles[col][row] != TILE_WALL) {
                                 DrawRectangleLines(
@@ -1483,7 +1496,7 @@ int main(void/*int argc, char* argv[]*/) {
                 }
                 EndMode2D();
                 DrawFPS(10, 5);
-				render_player_inventory(zor);
+                render_player_inventory(zor);
             }
             EndDrawing();
         }
@@ -1500,8 +1513,8 @@ int main(void/*int argc, char* argv[]*/) {
         for (int i = 0; i < entity_data.entity_counter; i++) {
             UnloadTexture(entity_data.entities[i].texture);
         }
-	}
-    
+    }
+
     CloseWindow();
     return 0;
 }
