@@ -109,7 +109,7 @@ typedef struct {
     int cur_move_anim_extra_frame;
     bool attack_damage_given; // when the attack damage is complete
     //int attack_damage;
-
+    int cur_room;
 } Entity;
 
 #define MOVE_ANIMATION_EXTRA_FRAMES 3

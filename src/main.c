@@ -52,6 +52,9 @@ const int world_width = 32 * 14;
 
 // #define NPC_MAX_INVENTORY_SIZE 4
 
+#define FOG_AMOUNT 0.3f
+#define VIEW_DISTANCE 5.0f
+
 void rotate_smooth(enum Direction target, enum Direction* dir) {
     int diff = (target - *dir + 8) % 8; // Calculate the shortest difference in direction
 
@@ -260,6 +263,18 @@ void drop_random_item(Entity* entity, ItemData* item_data) {
     item_data->item_counter++;
     delete_item_from_entity_inventory(index, entity);
     //entity->prevent_pickup = true;
+}
+
+Vector2 get_active_position(Entity* ent) {
+    switch (ent->state) {
+    case MOVE:
+        return ent->position;
+        //return get_tile_infront_entity(ent);
+        break;
+    default: 
+        break;
+    }
+    return ent->original_position;
 }
 
 
@@ -1023,6 +1038,47 @@ PathList find_path_between_entities(MapData* map_data, bool cut_corners, Vector2
     return path_list;
 }
 
+bool is_entity_visible(Entity* from, Entity* to, MapData* map_data) {
+    printf("from %i - to %i\n", from->cur_room, to->cur_room);
+
+    if (to->state == MOVE) {
+        int moving_to_i = get_room_id_at_position(
+            get_tile_infront_entity(to).x,
+            get_tile_infront_entity(to).y,
+            map_data);
+        if (moving_to_i != -1 && moving_to_i == from->cur_room) {
+            return true;
+        }
+    }
+
+    if (from->cur_room != -1) {
+        if (to->cur_room != from->cur_room) {
+
+            if (to->state != MOVE)
+				return false;
+            else {
+                if (get_room_id_at_position(
+                    get_tile_infront_entity(to).x, 
+                    get_tile_infront_entity(to).y, 
+                    map_data) == from->cur_room) {
+						return true;
+                }
+                else {
+                    return false;
+                }
+            }
+        }
+    }
+    else {
+		//float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
+		float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
+		//printf("Distance: %2.5f\n", distance);
+        if (distance > VIEW_DISTANCE) 
+            return false;
+    }
+    return true;
+}
+
 void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* entity_data, MapData* map_data) {
     //if (ent->is_moving) return;
     //if (target->is_moving) return;
@@ -1223,11 +1279,12 @@ int main(void/*int argc, char* argv[]*/) {
     Texture2D texture_item_apple = LOAD_APPLE_TEXTURE();
 
     RenderTexture2D dungeon_texture = { 0 };
+    RenderTexture2D fog_texture = LoadRenderTexture(window_width, window_height);
 
     MapData map_data = { 0 };
 
     int cur_turn_entity_index = 0;
-    int cur_room = -1;
+    //int cur_room = -1;
 
     // main loop
     while (!WindowShouldClose()) {
@@ -1236,6 +1293,9 @@ int main(void/*int argc, char* argv[]*/) {
             window_width = GetScreenWidth();
             window_height = GetScreenHeight();
             camera.offset = (Vector2){ window_width / 2.0f, window_height / 2.0f };
+
+            UnloadRenderTexture(fog_texture);
+            fog_texture = LoadRenderTexture(window_width, window_height);
         }
 
         // handle events
@@ -1289,7 +1349,7 @@ int main(void/*int argc, char* argv[]*/) {
 							.health = 100,
 							.max_health = 100,
 							.can_swap_positions = false,
-							.max_turns = 2,
+							.max_turns = 1,
 							.inventory_size = 2
 					});
                 //ents = GetRandomValue(2, 4);
@@ -1380,12 +1440,13 @@ int main(void/*int argc, char* argv[]*/) {
         }
 
         // start of update ------------------------
-        cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
-        printf("Cur room: %i\n", cur_room);
+        //cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
+        printf("Cur room: %i\n", zor->cur_room);
 
 		// check for ents who are dead
         for (int i = 0; i < entity_data.entity_counter; ) {
             Entity* ent = &entity_data.entities[i];
+            ent->cur_room = get_room_id_at_position(ent->position.x, ent->position.y, &map_data);
             if (ent->health <= 0) {
                 drop_random_item(ent, &item_data);
                 remove_entity(i, &entity_data);
@@ -1540,127 +1601,185 @@ int main(void/*int argc, char* argv[]*/) {
             }
         }
 
-        // render
-        {
 
-            // do rendering
-            BeginDrawing();
+		// do rendering
+		BeginDrawing();
+		{
+			ClearBackground(BLACK);
+
+			DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
+			DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
+
+			BeginMode2D(camera);
+			{
+				// render map
+				DrawTexture(dungeon_texture.texture, 0, 0, WHITE);
+				for (int row = 0; row < map_data.rows; row++) {
+					for (int col = 0; col < map_data.cols; col++) {
+						Color clr = LIGHTGREEN;
+						if (IsKeyDown(KEY_SPACE) && map_data.tiles[col][row] != TILE_WALL) {
+							Color clr = BLACK_SEMI_TRANSPARENT;
+
+							grid_mouse_position = GetMousePosition();
+							grid_mouse_position = GetScreenToWorld2D(grid_mouse_position, camera);
+							grid_mouse_position = Vector2Divide(grid_mouse_position, (Vector2) { TILE_SIZE, TILE_SIZE });
+							grid_mouse_position.x = floorf(grid_mouse_position.x);
+							grid_mouse_position.y = floorf(grid_mouse_position.y);
+							//print_vector2(grid_mouse_position);
+
+							if (grid_mouse_position.x == col && grid_mouse_position.y == row) {
+								clr = YELLOW;
+							}
+
+							if (Vector2Equals(get_tile_infront_entity(zor), (Vector2){col, row})) {
+								clr = ORANGE;
+							}
+							
+							Vector2 mouse_grid_pos_dir = Vector2Clamp(
+								Vector2Subtract(grid_mouse_position, zor->original_position),
+								(Vector2) {
+								-1.0f, -1.0f
+							},
+								(Vector2) {
+								1.0f, 1.0f
+							});
+							//print_vector2(mouse_grid_pos_dir);
+							
+							if (Vector2Equals(Vector2Add(zor->original_position, mouse_grid_pos_dir), (Vector2) { col, row })) {
+								clr = RED;
+							}
+
+							DrawRectangleLines(
+								col * TILE_SIZE,
+								row * TILE_SIZE,
+								TILE_SIZE,
+								TILE_SIZE,
+								clr);
+					}
+					}
+				}
+
+				// render items
+				for (int i = 0; i < item_data.item_counter; i++) {
+					switch (item_data.items[i].type) {
+					case ITEM_NOTHING: {
+						printf("Error: Tried to render ITEM_NOTHING.");
+						break;
+					}
+					case ITEM_SPILLEDCUP: {
+						DrawTextureRec(texture_item_spilledcup, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
+						break;
+					}
+					case ITEM_STICK: {
+						DrawTextureRec(texture_item_stick, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
+						break;
+					}
+					case ITEM_APPLE: {
+						DrawTextureRec(texture_item_apple, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
+						break;
+					}
+					default: {
+						printf("Idk\n");
+						break;
+					}
+					}
+				}
+			} // end camera rendering
+			EndMode2D();
+
+            // render fog texture
             {
-                ClearBackground(BLACK);
+                BeginTextureMode(fog_texture);
+                BeginBlendMode(BLEND_SUBTRACT_COLORS);
+                ClearBackground(Fade(BLACK, FOG_AMOUNT)); // Dim the whole screen
 
-                DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
-                DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
+                if (zor->cur_room != -1) {
+                    Room* rm = &map_data.rooms[zor->cur_room];
 
-                BeginMode2D(camera);
-                {
-                    // render map
-                    DrawTexture(dungeon_texture.texture, 0, 0, WHITE);
-                    for (int row = 0; row < map_data.rows; row++) {
-                        for (int col = 0; col < map_data.cols; col++) {
-                            Color clr = LIGHTGREEN;
-                            if (IsKeyDown(KEY_SPACE) && map_data.tiles[col][row] != TILE_WALL) {
-                                Color clr = BLACK_SEMI_TRANSPARENT;
+                    // Calculate the room's position and size based on TILE_SIZE
+                    Vector2 tl = (Vector2){ rm->x * TILE_SIZE, rm->y * TILE_SIZE };
+                    tl.x -= TILE_SIZE / 4;
+                    tl.y -= TILE_SIZE / 4;
+                    tl = GetWorldToScreen2D(tl, camera);
 
-								grid_mouse_position = GetMousePosition();
-                                grid_mouse_position = GetScreenToWorld2D(grid_mouse_position, camera);
-                                grid_mouse_position = Vector2Divide(grid_mouse_position, (Vector2) { TILE_SIZE, TILE_SIZE });
-                                grid_mouse_position.x = floorf(grid_mouse_position.x);
-                                grid_mouse_position.y = floorf(grid_mouse_position.y);
-								//print_vector2(grid_mouse_position);
+                    Vector2 br = (Vector2){ (rm->x + rm->cols) * TILE_SIZE, (rm->y + rm->rows) * TILE_SIZE };
+                    br = GetWorldToScreen2D(br, camera);
+                    br.x += TILE_SIZE / 4;
+                    br.y += TILE_SIZE / 4;
 
-								if (grid_mouse_position.x == col && grid_mouse_position.y == row) {
-									clr = YELLOW;
-								}
+                    //Vector2 delta = Vector2Subtract(br, tl);
+                    Vector2 delta = (Vector2){
+                       br.x - tl.x,
+                       br.y - tl.y
+                    };
+                    tl.y += delta.y;
 
-                                if (Vector2Equals(get_tile_infront_entity(zor), (Vector2){col, row})) {
-                                    clr = ORANGE;
-                                }
-                                
-                                Vector2 mouse_grid_pos_dir = Vector2Clamp(
-                                    Vector2Subtract(grid_mouse_position, zor->original_position),
-                                    (Vector2) {
-                                    -1.0f, -1.0f
-                                },
-                                    (Vector2) {
-                                    1.0f, 1.0f
-                                });
-                                //print_vector2(mouse_grid_pos_dir);
-                                
-                                if (Vector2Equals(Vector2Add(zor->original_position, mouse_grid_pos_dir), (Vector2) { col, row })) {
-                                    clr = RED;
-                                }
-
-								DrawRectangleLines(
-									col * TILE_SIZE,
-									row * TILE_SIZE,
-									TILE_SIZE,
-									TILE_SIZE,
-                                    clr);
-						}
-                        }
-                    }
-
-                    // render items
-                    for (int i = 0; i < item_data.item_counter; i++) {
-                        switch (item_data.items[i].type) {
-                        case ITEM_NOTHING: {
-                            printf("Error: Tried to render ITEM_NOTHING.");
-                            break;
-                        }
-                        case ITEM_SPILLEDCUP: {
-                            DrawTextureRec(texture_item_spilledcup, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
-                            break;
-                        }
-                        case ITEM_STICK: {
-                            DrawTextureRec(texture_item_stick, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
-                            break;
-                        }
-                        case ITEM_APPLE: {
-                            DrawTextureRec(texture_item_apple, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
-                            break;
-                        }
-                        default: {
-                            printf("Idk\n");
-                            break;
-                        }
-                        }
-                    }
-
-                    // y sort render entities
-                    {
-                        bool rendered[MAX_INSTANCES] = { false };
-                        for (int i = 0; i < entity_data.entity_counter; i++) {
-                            int lowest_y = 99999;
-                            int index_to_render = -1;
-
-                            for (int e = 0; e < entity_data.entity_counter; e++) {
-                                Entity* ent = &entity_data.entities[e];
-                                Vector2 text_pos = position_to_grid_position(ent->position);
-                              /*  char txt[8];
-                                sprintf_s(txt, 2, "%i", e);
-                                DrawText(txt, text_pos.x, text_pos.y, 24, WHITE);*/
-                                int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
-                                //DrawRectangle(x_pos, y_pos, 50, 50, RED);
-                                if (!rendered[e] && y_pos < lowest_y) {
-                                    lowest_y = y_pos;
-                                    index_to_render = e;
-                                }
-                            }
-
-                            if (index_to_render != -1) {
-                                render_entity(&entity_data.entities[index_to_render]);
-                                rendered[index_to_render] = true;
-                            }
-                        }
-                    }
-
+                    //DrawRectangle(tl.x, window_height - tl.y, delta.x, delta.y, Fade(BLACK, 0.5f));
+                    Rectangle light = (Rectangle){ tl.x, window_height - tl.y, delta.x, delta.y };
+                    DrawRectangleRounded(light, 0.3f, 0.0f, Fade(BLACK, FOG_AMOUNT));
                 }
-                EndMode2D();
-                DrawFPS(10, 5);
-                render_player_inventory(zor);
+                else {
+                    Vector2 pos = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+                    pos.x += TILE_SIZE / 2;
+                    pos.y -= TILE_SIZE / 4;
+                    Vector2 screen_pos = GetWorldToScreen2D(pos, camera);
+
+                    Vector2 size = (Vector2){TILE_SIZE * 2.5, 0.0f};
+                    size.x *= camera.zoom;
+                    DrawCircle(screen_pos.x, screen_pos.y, size.x, Fade(BLACK, FOG_AMOUNT));
+                }
+
+                EndBlendMode();
+                EndTextureMode(); // End drawing to texture
+
+                // Draw the fog texture over the whole screen
+                DrawTexture(fog_texture.texture, 0, 0, WHITE);
             }
-            EndDrawing();
-        }
+
+            BeginMode2D(camera);
+			// y sort render entities
+			{
+				bool rendered[MAX_INSTANCES] = { false };
+				for (int i = 0; i < entity_data.entity_counter; i++) {
+					int lowest_y = 99999;
+					int index_to_render = -1;
+
+					for (int e = 0; e < entity_data.entity_counter; e++) {
+						Entity* ent = &entity_data.entities[e];
+
+                        if (e != 0) {
+                            if (!is_entity_visible(zor, ent, &map_data)) continue;
+                        }
+
+						//Vector2 text_pos = position_to_grid_position(ent->position);
+
+					  /*  char txt[8];
+						sprintf_s(txt, 2, "%i", e);
+						DrawText(txt, text_pos.x, text_pos.y, 24, WHITE);*/
+
+
+						int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
+						//DrawRectangle(x_pos, y_pos, 50, 50, RED);
+						if (!rendered[e] && y_pos < lowest_y) {
+							lowest_y = y_pos;
+							index_to_render = e;
+						}
+					}
+
+					if (index_to_render != -1) {
+						render_entity(&entity_data.entities[index_to_render]);
+						rendered[index_to_render] = true;
+					}
+				}
+			}
+            EndMode2D();
+
+
+			DrawFPS(10, 5);
+			render_player_inventory(zor);
+
+		} // end rendering
+        EndDrawing();
     }
 
     // delete item textures
