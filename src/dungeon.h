@@ -80,6 +80,8 @@ typedef struct {
 #define MAX_COLS 64
 
 typedef struct {
+    int n_sectors;
+
     int cols;
     int rows;
     // enum TileType** tileenum TileType (*tiles)[rows];s;
@@ -87,6 +89,7 @@ typedef struct {
     enum TileType tiles[MAX_COLS][MAX_ROWS];
     Vector2 corridor_entrance_points[32];
     // enum TileType (*tiles)[MAX_ROWS];
+    Room rooms[MAX_ROOMS];
 } MapData;
 
 extern MapData generate_map(MapGenerationConfig config);
