@@ -52,19 +52,6 @@ const int world_width = 32 * 14;
 
 // #define NPC_MAX_INVENTORY_SIZE 4
 
-// todo: rotation animation
-// timed rotations
-enum Direction {
-    DOWN,
-    DOWNRIGHT,
-    RIGHT,
-    UPRIGHT,
-    UP,
-    UPLEFT,
-    LEFT,
-    DOWNLEFT
-};
-
 void rotate_smooth(enum Direction target, enum Direction* dir) {
     int diff = (target - *dir + 8) % 8; // Calculate the shortest difference in direction
 
@@ -1219,6 +1206,7 @@ int main(void/*int argc, char* argv[]*/) {
     MapData map_data = { 0 };
 
     int cur_turn_entity_index = 0;
+    int cur_room = -1;
 
     // main loop
     while (!WindowShouldClose()) {
@@ -1271,7 +1259,7 @@ int main(void/*int argc, char* argv[]*/) {
                 });*/
 
                 //int ents = GetRandomValue(4, 7);
-                int ents = 1;
+                int ents = 5;
                 for (int i = 0; i < ents; i++)
 					create_entity_instance(&entity_data, (Entity) {
 						.ent_type = ENT_FLY,
@@ -1280,7 +1268,7 @@ int main(void/*int argc, char* argv[]*/) {
 							.health = 100,
 							.max_health = 100,
 							.can_swap_positions = false,
-							.max_turns = 1,
+							.max_turns = 2,
 							.inventory_size = 2
 					});
                 //ents = GetRandomValue(2, 4);
@@ -1370,6 +1358,10 @@ int main(void/*int argc, char* argv[]*/) {
         }
         }
 
+        // start of update ------------------------
+        cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
+        printf("Cur room: %i\n", cur_room);
+
 		// check for ents who are dead
         for (int i = 0; i < entity_data.entity_counter; ) {
             Entity* ent = &entity_data.entities[i];
@@ -1387,11 +1379,11 @@ int main(void/*int argc, char* argv[]*/) {
         // ================================================================== //
 
         // debug statements
-        printf("\nEntity turn id: %i\n", cur_turn_entity_index);
-        for (int i = 0; i < entity_data.entity_counter; i++) {
+        //printf("\nEntity turn id: %i\n", cur_turn_entity_index);
+        /*for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
             printf("Entity %i state %i async %i ||| turn %i/%i ||| maxframe %.5f\n", i, ent->state, (int)ent->sync_move, ent->n_turn, ent->max_turns, ent->animation.max_frame_time);
-        }
+        }*/
 
 
         // process entities who are in sync moving
@@ -1504,13 +1496,8 @@ int main(void/*int argc, char* argv[]*/) {
                     }
                     case TILE_CORRIDOR:
                         printf("C ");
+                        break;
                     case TILE_FLOOR: {
-
-                        //if (inList(&path, (Node){col, row})) {
-                        /*if (isInPathList(&pathList, (Point) { col, row })) {
-                            printf("P ");
-                        }*/
-                        //else
                         printf("X ");
                         break;
                     }
@@ -1518,6 +1505,7 @@ int main(void/*int argc, char* argv[]*/) {
                         break;
                     }
                     case TILE_ROOM_ENTRANCE: {
+                        printf("E ");
                         break;
                     }
                     default: {

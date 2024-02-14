@@ -94,5 +94,7 @@ typedef struct {
 
 extern MapData generate_map(MapGenerationConfig config);
 
+extern int get_room_id_at_position(int x, int y, MapData* map_data);
+
 
 // #define TILETYPE_PTR(name) enum TileType (**name)

@@ -65,6 +65,20 @@ enum EntityType {
     ENT_FLY
 };
 
+// todo: rotation animation
+// timed rotations
+enum Direction {
+    DOWN,
+    DOWNRIGHT,
+    RIGHT,
+    UPRIGHT,
+    UP,
+    UPLEFT,
+    LEFT,
+    DOWNLEFT
+};
+
+
 typedef struct {
     enum EntityType ent_type;
     Vector2 position; // grid coordinate position

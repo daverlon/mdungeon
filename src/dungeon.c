@@ -97,10 +97,22 @@ void generate_rooms(MapData* map_data) {
 		printf("Room %i: [%i, %i, %i, %i]\n", i, rm->x, rm->y, rm->cols, rm->rows);
 		for (int col = rm->x; col < (rm->x + rm->cols); col++) {
 			for (int row = rm->y; row < (rm->y + rm->rows); row++) {
-                map_data->tiles[col][row] = TILE_FLOOR;
+                //if (map_data->tiles[col][row] != TILE_ROOM_ENTRANCE)
+				map_data->tiles[col][row] = TILE_FLOOR;
 			}
 		}
 	}
+}
+
+int get_room_id_at_position(int x, int y, MapData* map_data) {
+    for (int i = 0; i < map_data->n_sectors; i++) {
+        Room* rm = &map_data->rooms[i];
+        if (((x >= rm->x && x < rm->x + rm->cols)
+            && (y >= rm->y && y < rm->y + rm->rows))) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 // /*void*/enum TileType** generate_map(MapGenerationConfig config) {
