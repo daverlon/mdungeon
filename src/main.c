@@ -299,7 +299,7 @@ bool entity_exists_on_tile(int col, int row, Entity* ent) {
 
 void reset_entity_state(Entity* ent, bool use_turn) {
     ent->state = IDLE;
-    ent->original_position = ent->position;
+    //ent->original_position = ent->position;
     if (use_turn) {
         ent->n_turn++;
         ent->attack_damage_given = false;
@@ -319,6 +319,7 @@ void move_entity_forward(Entity* ent) {
 
     if (max_move_distance >= distance_to_target) {
         ent->position = targ;
+        ent->original_position = ent->position;
         reset_entity_state(ent, true);
     }
     else {
@@ -565,7 +566,7 @@ void render_entity(Entity* ent) {
         35.0f,
         BLACK_SEMI_TRANSPARENT
     );
-    /*DrawRectangle(
+    DrawRectangle(
         grid_original_position.x + (SPRITE_SIZE / 2.0f),
         grid_original_position.y + (SPRITE_SIZE / 2.0f) + (SPRITE_SIZE / 4.0f),
         15,
@@ -578,7 +579,7 @@ void render_entity(Entity* ent) {
         15,
         15,
         BLUE
-    );*/
+    );
 
 	// DrawRectangleLines(
     //  gridPosition.x, gridPosition.y, SPRITE_SIZE, SPRITE_SIZE, BLACK);
@@ -1045,7 +1046,8 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         Vector2 next_v = (Vector2){ next_p.x, next_p.y };
         Vector2 movement = Vector2Subtract(next_v, ent->original_position);
 
-        ent->direction = vector_to_direction(movement);
+        if (ent->state == IDLE)
+			ent->direction = vector_to_direction(movement);
 
         if (any_entity_exists_on_tile(next_v.x, next_v.y, entity_data, ent, NULL)
             && !entity_exists_on_tile(next_v.x, next_v.y, target)) {
@@ -1058,7 +1060,8 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
     else {
         // If next to target and it's this entity's turn, attack
         Vector2 movement = Vector2Subtract(target_pos, ent->original_position);
-        ent->direction = vector_to_direction(movement);
+        if (ent->state == IDLE)
+			ent->direction = vector_to_direction(movement);
         ent->state = ATTACK_MELEE;
     }
 }
@@ -1112,6 +1115,25 @@ int melee_attack_damage(Entity* ent) {
     return damage;
 }
 
+void apply_damage(Entity* to, Entity* from, int amount, bool change_direction) {
+    to->health -= amount;
+    
+    // spin the damaged entity around to look at the other ent
+
+    Vector2 direction = Vector2Clamp(Vector2Subtract(from->original_position, to->original_position),
+        (Vector2) {
+        -1.0f, -1.0f
+    },
+        (Vector2) {
+        1.0f, 1.0f
+    });
+
+    if (change_direction && to->state == IDLE && !Vector2Equals(direction, (Vector2){0.0f, 0.0f}))
+		to->direction = vector_to_direction(direction);
+
+    from->attack_damage_given = true;
+}
+
 void process_attack(Entity* ent, EntityData* entity_data) {
     enum EntityState attack_state = ent->state;
 
@@ -1125,8 +1147,7 @@ void process_attack(Entity* ent, EntityData* entity_data) {
         if (any_entity_exists_on_tile(tile.x, tile.y, entity_data, NULL, &id)) {
             if (!ent->attack_damage_given) {
                 if (ent->animation.cur_frame > 7) {
-					entity_data->entities[id].health -= damage;
-					ent->attack_damage_given = true;
+                    apply_damage(&entity_data->entities[id], ent, damage, true);
 				}
             }
         }
