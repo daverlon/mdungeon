@@ -222,6 +222,60 @@ bool item_exists_on_tile(int col, int row, const ItemData* item_data) {
     return false;
 }
 
+void delete_item_from_entity_inventory(const int index, Entity* entity) {
+    if (index >= entity->inventory_item_count) {
+        printf("Warning: Tried to delete inventory item index: %i, item counter: %i\n", index, entity->inventory_item_count);
+        return;
+    }
+
+    for (int i = index; i < entity->inventory_item_count; i++) {
+        entity->inventory[i] = entity->inventory[i + 1];
+    }
+    entity->inventory_item_count--;
+    printf("Deleted inventory item index: %i, %i items remaining.\n", index, entity->inventory_item_count);
+}
+
+void drop_item(const int index, Entity* entity, ItemData* item_data) {
+    //if (entity->state != IDLE) {
+    // check if item already exists at current position 
+
+    for (int i = 0; i < item_data->item_counter; i++) {
+        if (Vector2Equals(entity->original_position, item_data->items[i].position)) {
+            printf("Tried to drop item on top of existing item.\n");
+            return;
+        }
+    }
+    item_data->items[item_data->item_counter] = (Item){ entity->inventory[index], entity->position };
+    item_data->item_counter++;
+    delete_item_from_entity_inventory(index, entity);
+    //entity->prevent_pickup = true;
+}
+
+void drop_random_item(Entity* entity, ItemData* item_data) {
+
+    if (!(entity->inventory_item_count > 0)) return;
+
+    //if (entity->state != IDLE) {
+    if (entity->state == MOVE) {
+        printf("Tried to drop item while entity is moving.\n");
+        return;
+    }
+    // check if item already exists at current position 
+    for (int i = 0; i < item_data->item_counter; i++) {
+        if (Vector2Equals(entity->position, item_data->items[i].position)) {
+            printf("Tried to drop item on top of existing item.\n");
+            return;
+        }
+    }
+
+    int index = GetRandomValue(0, entity->inventory_item_count-1);
+    item_data->items[item_data->item_counter] = (Item){ entity->inventory[index], entity->position };
+    item_data->item_counter++;
+    delete_item_from_entity_inventory(index, entity);
+    //entity->prevent_pickup = true;
+}
+
+
 bool any_entity_exists_on_tile(int col, int row, const EntityData* entity_data, Entity* ignore, int* out) {
     Vector2 pos = (Vector2){ col, row };
     for (int i = 0; i < entity_data->entity_counter; i++) {
@@ -263,6 +317,7 @@ void reset_entity_state(Entity* ent, bool use_turn) {
         ent->n_turn++;
         ent->attack_damage_given = false;
     }
+    //ent->prevent_pickup = false;
 }
 
 void move_entity_forward(Entity* ent) {
@@ -305,10 +360,14 @@ void swap_entity_positions(Entity* ent1, Entity* ent2) {
     ent2->state = MOVE;
 }
 
-void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], EntityData* entity_data) {
+void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], EntityData* entity_data, ItemData* item_data, Vector2 grid_mouse_position) {
 
     // if no key is held, ensure that isMoving is set to false
     if (ent->state != IDLE) return;
+
+	if (IsKeyPressed(KEY_E) && ent->inventory_item_count > 0) {
+		drop_item(ent->inventory_item_count - 1, ent, item_data);
+	}
 
     bool should_move = false;
 
@@ -347,8 +406,19 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
         should_move = true;
     }
 
-    if (IsKeyDown(KEY_SPACE) && should_move) {
+    if (IsKeyDown(KEY_SPACE)) {
         should_move = false;
+
+		Vector2 mouse_grid_pos_dir = Vector2Clamp(
+			Vector2Subtract(grid_mouse_position, ent->original_position),
+			(Vector2) {
+			-1.0f, -1.0f
+		},
+		(Vector2) {
+			1.0f, 1.0f
+		});
+        if (Vector2Length(GetMouseDelta()) != 0.0f)
+            ent->direction = vector_to_direction(mouse_grid_pos_dir);
     }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !should_move) {
@@ -360,8 +430,8 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
     Vector2 movement = direction_to_vector2(ent->direction);
 
     if (should_move) {
-        if (ent->prevent_pickup)
-            ent->prevent_pickup = false;
+        /*if (ent->prevent_pickup)
+            ent->prevent_pickup = false;*/
 
         // printf("MOVE!\n");
         // printf("X: %2.0f -> %2.0f\n", ent->position.x, ent->position.x+1.0f);
@@ -538,11 +608,10 @@ void render_entity(Entity* ent) {
             WHITE
             );
 
-
 	// hp bar width
-    int hp_bar_x = grid_position.x + TILE_SIZE / 2.5;
-    int hp_bar_y = grid_position.y + SPRITE_SIZE / 1.2;
-    int hp_bar_height = 20;
+    int hp_bar_x = grid_position.x + TILE_SIZE / 1.3 + 2;
+	int hp_bar_y = grid_position.y + SPRITE_SIZE / 1.2;
+    int hp_bar_height = 10;
     int hp_bar_width = TILE_SIZE;
     int hp_cur_width = ((float)ent->health / (float)ent->max_health) * (float)hp_bar_width;
     DrawRectangle(hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height, BLACK);
@@ -659,7 +728,7 @@ void update_animation_state(Entity* ent) {
         }
         case ATTACK_MELEE: {
             ent->animation.max_frame_time = 0.010f;
-            ent->animation.y_offset = 2048;
+			ent->animation.y_offset = 2048;
             break;
         }
         default: {
@@ -789,57 +858,29 @@ void pickup_item(const int index, ItemData* item_data, Entity* entity) {
     // this should be called with delete_item called after
     // todo:
     // check for out of bounds index (should never occur with good code)
-    if (entity->inventory_item_count < INVENTORY_SIZE) {
+    if (entity->inventory_item_count < entity->inventory_size) {
         entity->inventory[entity->inventory_item_count] = item_data->items[index].type;
         entity->inventory_item_count++;
+		delete_item(index, item_data);
     }
-    delete_item(index, item_data);
     // else: "inventory full"?
 }
 
 void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
-    if (!entity->prevent_pickup) {
+    //if (!entity->prevent_pickup) {
         // entity can pickup item
         for (int i = 0; i < item_data->item_counter; i++) {
             Item* item = &item_data->items[i];
             // item exists on same tile as entity
-            if (Vector2Equals(item->position, entity->position)) {
+            if (
+                (entity->state == MOVE &&Vector2Equals(item->position, get_tile_infront_entity(entity))
+             && (!Vector2Equals(item->position, entity->original_position))
+			)) {
                 pickup_item(i, item_data, entity);
+                break;
             }
         }
-    }
-}
-
-void delete_item_from_entity_inventory(const int index, Entity* entity) {
-    if (index >= entity->inventory_item_count) {
-        printf("Warning: Tried to delete inventory item index: %i, item counter: %i\n", index, entity->inventory_item_count);
-        return;
-    }
-
-    for (int i = index; i < entity->inventory_item_count; i++) {
-        entity->inventory[i] = entity->inventory[i + 1];
-    }
-    entity->inventory_item_count--;
-    printf("Deleted inventory item index: %i, %i items remaining.\n", index, entity->inventory_item_count);
-}
-
-void drop_item(const int index, Entity* entity, ItemData* item_data) {
-    //if (entity->state != IDLE) {
-    if (entity->state == MOVE) {
-        printf("Tried to drop item while entity is moving.\n");
-        return;
-    }
-    // check if item already exists at current position 
-    for (int i = 0; i < item_data->item_counter; i++) {
-        if (Vector2Equals(entity->position, item_data->items[i].position)) {
-            printf("Tried to drop item on top of existing item.\n");
-            return;
-        }
-    }
-    item_data->items[item_data->item_counter] = (Item){ entity->inventory[index], entity->position };
-    item_data->item_counter++;
-    delete_item_from_entity_inventory(index, entity);
-    entity->prevent_pickup = true;
+    //}
 }
 
 void render_player_inventory(Entity* player) {
@@ -883,6 +924,7 @@ void set_gamestate(GameStateInfo* gsi, enum GameState state) {
 void create_entity_instance(EntityData* entity_data, Entity ent) {
     ent.original_position = ent.position;
     entity_data->entities[entity_data->entity_counter] = ent;
+    ent.cur_move_anim_extra_frame = MOVE_ANIMATION_EXTRA_FRAMES;
     printf("Created entity at index %i.", entity_data->entity_counter);
     entity_data->entity_counter++;
     printf(" Instance counter is now %i\n", entity_data->entity_counter);
@@ -1038,27 +1080,15 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
     }
 }
 
-//void calculate_next_turn(Entity* ent, const MapData* map_data, const EntityData* entity_data) {
-//    Entity* player = &entity_data->entities[0];
-//    switch (ent->ent_type) {
-//    case ENT_FLY:
-//        ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
-//        break;
-//        // Add more cases for other entity types if needed
-//    default:
-//        // Default behavior if entity type is not recognized
-//        break;
-//    }
-//}
-
-void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* entity_data) {
+void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* entity_data, ItemData* item_data, Vector2 grid_mouse_position) {
     // player is usually entity index 0
     if (ent == player) {
         // get player next action
-        control_entity(ent, map_data->tiles, &entity_data);
+        control_entity(ent, map_data->tiles, entity_data, item_data, grid_mouse_position);
     }
     else {
         switch (ent->ent_type) {
+        case ENT_ZOR:
         case ENT_FLY: {
             ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
             break;
@@ -1158,6 +1188,7 @@ int main(void/*int argc, char* argv[]*/) {
     InitWindow(window_width, window_height, "mDungeon");
     SetWindowState(FLAG_VSYNC_HINT);
     SetWindowState(FLAG_WINDOW_RESIZABLE);
+    //SetWindowState(FLAG_WINDOW_MAXIMIZED);
     //SetTargetFPS(30);
 
     SetRandomSeed(1337);
@@ -1169,59 +1200,13 @@ int main(void/*int argc, char* argv[]*/) {
         camera.rotation = 0.0f;
         camera.zoom = 1.0f;
     }
+    Vector2 grid_mouse_position = { 0 };
 
     EntityData entity_data = (EntityData){ 0 };
     Entity* zor = { 0 };
     Entity* fantano = { 0 };
     Entity* cyhar = { 0 };
 
-    // init the entities
-    create_entity_instance(&entity_data, (Entity) {
-        .ent_type = ENT_ZOR,
-            .texture = LOAD_ZOR_TEXTURE(),
-            .animation = (Animation){ .n_frames = 20 },
-            .health = 25,
-            .max_health = 25,
-            .max_turns = 2
-    });
-    zor = GET_LAST_ENTITY_REF();
-
-    /*create_entity_instance(&entity_data, (Entity) {
-        .ent_type = ENT_FANTANO,
-        .texture = LOAD_FANTANO_TEXTURE(),
-        .can_swap_positions = true,
-        .animation = (Animation){ .n_frames = 20 },
-        .health = 100,
-        .can_swap_positions = true
-    });
-    fantano = GET_LAST_ENTITY_REF();*/
-
-    /*create_entity_instance(&entity_data, (Entity) {
-        .ent_type = ENT_CYHAR,
-        .texture = LOAD_CYHAR_TEXTURE(),
-        .animation = (Animation){ .n_frames = 20 },
-        .health = 100
-    });
-    cyhar = GET_LAST_ENTITY_REF();*/
-
-    create_entity_instance(&entity_data, (Entity) {
-        .ent_type = ENT_FLY,
-            .texture = LOAD_FLY_TEXTURE(),
-            .animation = (Animation){ .n_frames = 10 },
-            .health = 14,
-            .max_health = 14,
-            .can_swap_positions = false,
-            .max_turns = 1
-    });
-    create_entity_instance(&entity_data, (Entity) {
-        .ent_type = ENT_FLY,
-            .texture = LOAD_FLY_TEXTURE(),
-            .animation = (Animation){ .n_frames = 10 },
-            .health = 14,
-            .max_health = 14,
-            .can_swap_positions = false,
-            .max_turns = 1
-    });
 
     ItemData item_data = (ItemData){ .items = { 0 }, .item_counter = 0 };
     nullify_all_items(&item_data);
@@ -1234,10 +1219,7 @@ int main(void/*int argc, char* argv[]*/) {
     RenderTexture2D dungeon_texture = { 0 };
 
     MapData map_data = { 0 };
-    //DamageTile damage_tiles[MAX_DAMAGE_TILES] = { 0 };
 
-    /*int async_move_ents[MAX_INSTANCES];
-    int async_move_ents_counter = 0;*/
     int cur_turn_entity_index = 0;
 
     // main loop
@@ -1268,6 +1250,48 @@ int main(void/*int argc, char* argv[]*/) {
                 cur_turn_entity_index = 0;
                 map_data = generate_map(DUNGEON_PRESET_BASIC);
                 generate_enchanted_groves_dungeon_texture(&map_data, &dungeon_texture);
+
+				// init the entities
+				create_entity_instance(&entity_data, (Entity) {
+					.ent_type = ENT_ZOR,
+						.texture = LOAD_ZOR_TEXTURE(),
+						.animation = (Animation){ .n_frames = 20 },
+						.health = 25,
+						.max_health = 25,
+						.max_turns = 2,
+                        .inventory_size = 3
+				});
+				zor = GET_LAST_ENTITY_REF();
+
+                /*create_entity_instance(&entity_data, (Entity) {
+                    .ent_type = ENT_ZOR,
+                        .texture = LOAD_ZOR_TEXTURE(),
+                        .animation = (Animation){ .n_frames = 20 },
+                        .health = 25,
+                        .max_health = 25,
+                        .max_turns = 1
+                });*/
+
+				create_entity_instance(&entity_data, (Entity) {
+					.ent_type = ENT_FLY,
+						.texture = LOAD_FLY_TEXTURE(),
+						.animation = (Animation){ .n_frames = 10 },
+						.health = 14,
+						.max_health = 14,
+						.can_swap_positions = false,
+						.max_turns = 1,
+                        .inventory_size = 2
+				});
+				create_entity_instance(&entity_data, (Entity) {
+					.ent_type = ENT_FLY,
+						.texture = LOAD_FLY_TEXTURE(),
+						.animation = (Animation){ .n_frames = 10 },
+						.health = 14,
+						.max_health = 14,
+						.can_swap_positions = false,
+						.max_turns = 1,
+                        .inventory_size = 2
+				});
 
                 nullify_all_items(&item_data);
                 spawn_items(ITEM_STICK, &item_data, &map_data, 3, 5);
@@ -1351,8 +1375,19 @@ int main(void/*int argc, char* argv[]*/) {
             break;
         }
         }
-        if (IsKeyPressed(KEY_E) && zor->inventory_item_count > 0) {
-            drop_item(zor->inventory_item_count - 1, zor, &item_data);
+
+		// check for ents who are dead
+        for (int i = 0; i < entity_data.entity_counter; ) {
+            Entity* ent = &entity_data.entities[i];
+            if (ent->health <= 0) {
+                drop_random_item(ent, &item_data);
+                remove_entity(i, &entity_data);
+                // Don't increment i, as we want to check the new entity that's now at index i
+            }
+            else {
+                // Only increment i if no entity was removed
+                i++;
+            }
         }
 
         // ================================================================== //
@@ -1372,7 +1407,7 @@ int main(void/*int argc, char* argv[]*/) {
 
                 if (!ent->async_move) continue;
 
-                if (entity_finished_turn(ent) || ent->state == IDLE) {
+                if (entity_finished_turn(ent)) {
                     // when an async entity has finished their turn
                     cur_turn_entity_index++;
                     ent->n_turn = 0;
@@ -1384,7 +1419,7 @@ int main(void/*int argc, char* argv[]*/) {
                 else {
                     // if not, rethink turn and process it
                     if (ent->state == IDLE || ent->state == SKIP_TURN) {
-                        entity_think(ent, zor, &map_data, &entity_data);
+                        entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
                     }
                     process_entity_state(ent, &entity_data);
                 }
@@ -1395,14 +1430,14 @@ int main(void/*int argc, char* argv[]*/) {
 
             Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
 
-            entity_think(this_ent, zor, &map_data, &entity_data);
+            entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
 
             // check if async entities should exist for this turn
             // and log them
             if (this_ent->state == MOVE) {
                 for (int i = cur_turn_entity_index + 1; i < entity_data.entity_counter; i++) {
                     Entity* ent = &entity_data.entities[i];
-                    entity_think(ent, zor, &map_data, &entity_data);
+                    entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
                     if (ent->state != MOVE && ent->state != SKIP_TURN) {
                         break;
                     }
@@ -1416,7 +1451,7 @@ int main(void/*int argc, char* argv[]*/) {
 
                 Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
 
-                entity_think(this_ent, zor, &map_data, &entity_data);
+                entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
 
                 process_entity_state(this_ent, &entity_data);
 
@@ -1428,7 +1463,6 @@ int main(void/*int argc, char* argv[]*/) {
                         cur_turn_entity_index = 0;
                     }
                 }
-
             }
             else {
 
@@ -1437,37 +1471,24 @@ int main(void/*int argc, char* argv[]*/) {
 
         // ================================================================== //
 
-		// check for ents who are dead
-        for (int i = 0; i < entity_data.entity_counter; ) {
-            Entity* ent = &entity_data.entities[i];
-            if (ent->health <= 0) {
-                remove_entity(i, &entity_data);
-                // Don't increment i, as we want to check the new entity that's now at index i
-            }
-            else {
-                // Only increment i if no entity was removed
-                i++;
-            }
-        }
-
         for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
             update_animation_state(ent);
+			scan_items_for_pickup(&item_data, ent);
         }
 
         Vector2 cam_target = { 0 };
-        /*if (zor->state == ATTACK_MELEE) {
+        if (zor->state == ATTACK_MELEE) {
             cam_target = Vector2Multiply(zor->original_position, (Vector2) { TILE_SIZE, TILE_SIZE });
         }
-        else {*/
-        cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
-        //}
+        else {
+			cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+        }
+
         cam_target.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
         cam_target.y += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 4);
         camera.target = cam_target;
 
-        scan_items_for_pickup(&item_data, zor);
-        //scan_items_for_pickup(&item_data, fantano);
 
         // echo map layout to console
         if (IsKeyPressed(KEY_V)) {
@@ -1525,16 +1546,45 @@ int main(void/*int argc, char* argv[]*/) {
                     for (int row = 0; row < map_data.rows; row++) {
                         for (int col = 0; col < map_data.cols; col++) {
                             Color clr = LIGHTGREEN;
-                            if (IsKeyDown(KEY_SPACE)
-                                //&& map_data.tiles[(int)zor->position.x][(int)zor->position.y] == map_data.tiles[col][row]) {
-                                && map_data.tiles[col][row] != TILE_WALL) {
-                                DrawRectangleLines(
-                                    col * TILE_SIZE,
-                                    row * TILE_SIZE,
-                                    TILE_SIZE,
-                                    TILE_SIZE,
-                                    BLACK_SEMI_TRANSPARENT);
-                            }
+                            if (IsKeyDown(KEY_SPACE) && map_data.tiles[col][row] != TILE_WALL) {
+                                Color clr = BLACK_SEMI_TRANSPARENT;
+
+								grid_mouse_position = GetMousePosition();
+                                grid_mouse_position = GetScreenToWorld2D(grid_mouse_position, camera);
+                                grid_mouse_position = Vector2Divide(grid_mouse_position, (Vector2) { TILE_SIZE, TILE_SIZE });
+                                grid_mouse_position.x = floorf(grid_mouse_position.x);
+                                grid_mouse_position.y = floorf(grid_mouse_position.y);
+								//print_vector2(grid_mouse_position);
+
+								if (grid_mouse_position.x == col && grid_mouse_position.y == row) {
+									clr = YELLOW;
+								}
+
+                                if (Vector2Equals(get_tile_infront_entity(zor), (Vector2){col, row})) {
+                                    clr = ORANGE;
+                                }
+                                
+                                Vector2 mouse_grid_pos_dir = Vector2Clamp(
+                                    Vector2Subtract(grid_mouse_position, zor->original_position),
+                                    (Vector2) {
+                                    -1.0f, -1.0f
+                                },
+                                    (Vector2) {
+                                    1.0f, 1.0f
+                                });
+                                //print_vector2(mouse_grid_pos_dir);
+                                
+                                if (Vector2Equals(Vector2Add(zor->original_position, mouse_grid_pos_dir), (Vector2) { col, row })) {
+                                    clr = RED;
+                                }
+
+								DrawRectangleLines(
+									col * TILE_SIZE,
+									row * TILE_SIZE,
+									TILE_SIZE,
+									TILE_SIZE,
+                                    clr);
+						}
                         }
                     }
 
