@@ -268,8 +268,11 @@ void drop_random_item(Entity* entity, ItemData* item_data) {
 Vector2 get_active_position(Entity* ent) {
     switch (ent->state) {
     case MOVE:
-        return ent->position;
-        //return get_tile_infront_entity(ent);
+        //return ent->position;
+        return get_tile_infront_entity(ent);
+        break;
+    /*case ATTACK_MELEE:
+        return ent->original_position;*/
         break;
     default: 
         break;
@@ -581,7 +584,7 @@ void render_entity(Entity* ent) {
         35.0f,
         BLACK_SEMI_TRANSPARENT
     );
-    DrawRectangle(
+    /*DrawRectangle(
         grid_original_position.x + (SPRITE_SIZE / 2.0f),
         grid_original_position.y + (SPRITE_SIZE / 2.0f) + (SPRITE_SIZE / 4.0f),
         15,
@@ -594,7 +597,7 @@ void render_entity(Entity* ent) {
         15,
         15,
         BLUE
-    );
+    );*/
 
 	// DrawRectangleLines(
     //  gridPosition.x, gridPosition.y, SPRITE_SIZE, SPRITE_SIZE, BLACK);
@@ -1288,8 +1291,9 @@ int main(void/*int argc, char* argv[]*/) {
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     //SetWindowState(FLAG_WINDOW_MAXIMIZED);
     //SetTargetFPS(30);
+    SetTargetFPS(144);
 
-    SetRandomSeed(69);
+    SetRandomSeed(123);
 
     Camera2D camera = { 0 };
     {
@@ -1477,12 +1481,16 @@ int main(void/*int argc, char* argv[]*/) {
 
         // start of update ------------------------
         //cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
-        printf("Cur room: %i\n", zor->cur_room);
+        //printf("Cur room: %i\n", zor->cur_room);
 
 		// check for ents who are dead
         for (int i = 0; i < entity_data.entity_counter; ) {
             Entity* ent = &entity_data.entities[i];
-            ent->cur_room = get_room_id_at_position(ent->position.x, ent->position.y, &map_data);
+
+            
+            Vector2 act = get_active_position(ent);
+            ent->cur_room = get_room_id_at_position(act.x, act.y, &map_data);
+
             if (ent->health <= 0) {
                 if (i == 0) { // player die
                     set_gamestate(&gsi, GS_INTRO_DUNGEON);
@@ -1762,7 +1770,13 @@ int main(void/*int argc, char* argv[]*/) {
                     DrawRectangleRounded(light, 0.3f, 0.0f, Fade(BLACK, FOG_AMOUNT));
                 }
                 else {
-                    Vector2 pos = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+                    Vector2 pos = { 0 };
+
+                    if (zor->state != MOVE)
+						pos = Vector2Multiply(zor->original_position, (Vector2) { TILE_SIZE, TILE_SIZE });
+                    else 
+						pos = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+
                     pos.x += TILE_SIZE / 2;
                     pos.y -= TILE_SIZE / 4;
                     Vector2 screen_pos = GetWorldToScreen2D(pos, camera);
