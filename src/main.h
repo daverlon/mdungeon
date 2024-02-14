@@ -110,6 +110,7 @@ typedef struct {
     bool attack_damage_given; // when the attack damage is complete
     //int attack_damage;
     int cur_room;
+    bool found_target; // for entity
 } Entity;
 
 #define MOVE_ANIMATION_EXTRA_FRAMES 3

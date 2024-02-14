@@ -922,6 +922,7 @@ void set_gamestate(GameStateInfo* gsi, enum GameState state) {
 
 void create_entity_instance(EntityData* entity_data, Entity ent) {
     ent.original_position = ent.position;
+    ent.direction = GetRandomValue(0, 7);
     entity_data->entities[entity_data->entity_counter] = ent;
     ent.cur_move_anim_extra_frame = MOVE_ANIMATION_EXTRA_FRAMES;
     printf("Created entity at index %i.", entity_data->entity_counter);
@@ -1039,7 +1040,7 @@ PathList find_path_between_entities(MapData* map_data, bool cut_corners, Vector2
 }
 
 bool is_entity_visible(Entity* from, Entity* to, MapData* map_data) {
-    printf("from %i - to %i\n", from->cur_room, to->cur_room);
+    //printf("from %i - to %i\n", from->cur_room, to->cur_room);
 
     if (to->state == MOVE) {
         int moving_to_i = get_room_id_at_position(
@@ -1069,6 +1070,7 @@ bool is_entity_visible(Entity* from, Entity* to, MapData* map_data) {
             }
         }
     }
+    // in corridor
     else {
 		//float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
 		float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
@@ -1079,11 +1081,45 @@ bool is_entity_visible(Entity* from, Entity* to, MapData* map_data) {
     return true;
 }
 
+bool is_item_visible(Entity* from, Item* item, MapData* map_data) {
+    int item_room = get_room_id_at_position(item->position.x, item->position.y, map_data);
+    // entity in a room
+    if (from->cur_room != -1) {
+        // match room with item
+        if (item_room != from->cur_room) {
+            return false;
+        }
+    }
+    else {
+        // entity not in a room
+
+        //float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
+        float distance = Vector2DistanceSqr(get_active_position(from), item->position);
+        //printf("Distance: %2.5f\n", distance);
+        if (distance > VIEW_DISTANCE)
+            return false;
+    }
+    return true;
+}
+
 void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* entity_data, MapData* map_data) {
     //if (ent->is_moving) return;
     //if (target->is_moving) return;
 
     // calculate next move state
+    if (!ent->found_target) {
+        if (is_entity_visible(ent, target, map_data)) {
+            if (!ent->found_target) {
+                ent->found_target = true;
+                printf("Found target\n");
+            }
+        }
+    }
+
+    if (!ent->found_target) {
+        ent->state = SKIP_TURN;
+        return;
+    }
 
     Vector2 target_pos = target->original_position;
     if (target->state == MOVE) {
@@ -1253,7 +1289,7 @@ int main(void/*int argc, char* argv[]*/) {
     //SetWindowState(FLAG_WINDOW_MAXIMIZED);
     //SetTargetFPS(30);
 
-    SetRandomSeed(499);
+    SetRandomSeed(69);
 
     Camera2D camera = { 0 };
     {
@@ -1323,8 +1359,8 @@ int main(void/*int argc, char* argv[]*/) {
 					.ent_type = ENT_ZOR,
 						.texture = LOAD_ZOR_TEXTURE(),
 						.animation = (Animation){ .n_frames = 20 },
-						.health = 100,
-						.max_health = 100,
+						.health = 30,
+						.max_health = 30,
 						.max_turns = 2,
                         .inventory_size = 3
 				});
@@ -1346,8 +1382,8 @@ int main(void/*int argc, char* argv[]*/) {
 						.ent_type = ENT_FLY,
 							.texture = LOAD_FLY_TEXTURE(),
 							.animation = (Animation){ .n_frames = 10 },
-							.health = 100,
-							.max_health = 100,
+							.health = 10,
+							.max_health = 10,
 							.can_swap_positions = false,
 							.max_turns = 1,
 							.inventory_size = 2
@@ -1448,6 +1484,11 @@ int main(void/*int argc, char* argv[]*/) {
             Entity* ent = &entity_data.entities[i];
             ent->cur_room = get_room_id_at_position(ent->position.x, ent->position.y, &map_data);
             if (ent->health <= 0) {
+                if (i == 0) { // player die
+                    set_gamestate(&gsi, GS_INTRO_DUNGEON);
+                    continue;
+                }
+                    
                 drop_random_item(ent, &item_data);
                 remove_entity(i, &entity_data);
                 // Don't increment i, as we want to check the new entity that's now at index i
@@ -1661,6 +1702,8 @@ int main(void/*int argc, char* argv[]*/) {
 
 				// render items
 				for (int i = 0; i < item_data.item_counter; i++) {
+                    if (!is_item_visible(zor, &item_data.items[i], &map_data)) continue;
+
 					switch (item_data.items[i].type) {
 					case ITEM_NOTHING: {
 						printf("Error: Tried to render ITEM_NOTHING.");
