@@ -417,7 +417,7 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
 		(Vector2) {
 			1.0f, 1.0f
 		});
-        if (Vector2Length(GetMouseDelta()) != 0.0f)
+        if (Vector2Length(GetMouseDelta()) != 0.0f && Vector2Length(mouse_grid_pos_dir) != 0.0f)
             ent->direction = vector_to_direction(mouse_grid_pos_dir);
     }
 
@@ -579,7 +579,7 @@ void render_entity(Entity* ent) {
         35.0f,
         BLACK_SEMI_TRANSPARENT
     );
-    DrawRectangle(
+    /*DrawRectangle(
         grid_original_position.x + (SPRITE_SIZE / 2.0f),
         grid_original_position.y + (SPRITE_SIZE / 2.0f) + (SPRITE_SIZE / 4.0f),
         15,
@@ -592,7 +592,7 @@ void render_entity(Entity* ent) {
         15,
         15,
         BLUE
-    );
+    );*/
 
 	// DrawRectangleLines(
     //  gridPosition.x, gridPosition.y, SPRITE_SIZE, SPRITE_SIZE, BLACK);
@@ -1141,10 +1141,12 @@ void process_attack(Entity* ent, EntityData* entity_data) {
         int id = 0;
         if (any_entity_exists_on_tile(tile.x, tile.y, entity_data, NULL, &id)) {
             if (!ent->attack_damage_given) {
+                if (ent->animation.cur_frame > 7) {
                 entity_data->entities[id].health -= damage;
+                ent->attack_damage_given = true;
+            }
             }
         }
-		ent->attack_damage_given = true;
         break;
     }
     default: {
@@ -1256,9 +1258,9 @@ int main(void/*int argc, char* argv[]*/) {
 					.ent_type = ENT_ZOR,
 						.texture = LOAD_ZOR_TEXTURE(),
 						.animation = (Animation){ .n_frames = 20 },
-						.health = 25,
-						.max_health = 25,
-						.max_turns = 2,
+						.health = 35,
+						.max_health = 35,
+						.max_turns = 1,
                         .inventory_size = 3
 				});
 				zor = GET_LAST_ENTITY_REF();
@@ -1272,30 +1274,24 @@ int main(void/*int argc, char* argv[]*/) {
                         .max_turns = 1
                 });*/
 
-				create_entity_instance(&entity_data, (Entity) {
-					.ent_type = ENT_FLY,
-						.texture = LOAD_FLY_TEXTURE(),
-						.animation = (Animation){ .n_frames = 10 },
-						.health = 14,
-						.max_health = 14,
-						.can_swap_positions = false,
-						.max_turns = 1,
-                        .inventory_size = 2
-				});
-				create_entity_instance(&entity_data, (Entity) {
-					.ent_type = ENT_FLY,
-						.texture = LOAD_FLY_TEXTURE(),
-						.animation = (Animation){ .n_frames = 10 },
-						.health = 14,
-						.max_health = 14,
-						.can_swap_positions = false,
-						.max_turns = 1,
-                        .inventory_size = 2
-				});
+                int ents = GetRandomValue(4, 7);
+                for (int i = 0; i < ents; i++)
+					create_entity_instance(&entity_data, (Entity) {
+						.ent_type = ENT_FLY,
+							.texture = LOAD_FLY_TEXTURE(),
+							.animation = (Animation){ .n_frames = 10 },
+							.health = 14,
+							.max_health = 14,
+							.can_swap_positions = false,
+							.max_turns = 1,
+							.inventory_size = 2
+					});
+                ents = GetRandomValue(2, 4);
 
                 nullify_all_items(&item_data);
-                spawn_items(ITEM_STICK, &item_data, &map_data, 3, 5);
-                spawn_items(ITEM_APPLE, &item_data, &map_data, 2, 5);
+                spawn_items(ITEM_STICK, &item_data, &map_data, 5, 8);
+                spawn_items(ITEM_APPLE, &item_data, &map_data, 4, 7);
+                spawn_items(ITEM_SPILLEDCUP, &item_data, &map_data, 2, 4);
 
                 for (int i = 0; i < entity_data.entity_counter; i++) {
                     Entity* ent = &entity_data.entities[i];
@@ -1307,7 +1303,8 @@ int main(void/*int argc, char* argv[]*/) {
                 gsi.init = true;
             }
             if (IsKeyPressed(KEY_R)) {
-                set_gamestate(&gsi, GS_ADVANCED_DUNGEON);
+                set_gamestate(&gsi, GS_INTRO_DUNGEON);
+                entity_data.entity_counter = 0;
             }
             break;
         }
@@ -1624,9 +1621,9 @@ int main(void/*int argc, char* argv[]*/) {
                             for (int e = 0; e < entity_data.entity_counter; e++) {
                                 Entity* ent = &entity_data.entities[e];
                                 Vector2 text_pos = position_to_grid_position(ent->position);
-                                char txt[8];
+                              /*  char txt[8];
                                 sprintf_s(txt, 2, "%i", e);
-                                DrawText(txt, text_pos.x, text_pos.y, 24, WHITE);
+                                DrawText(txt, text_pos.x, text_pos.y, 24, WHITE);*/
                                 int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
                                 //DrawRectangle(x_pos, y_pos, 50, 50, RED);
                                 if (!rendered[e] && y_pos < lowest_y) {
