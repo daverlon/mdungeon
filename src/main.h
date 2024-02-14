@@ -89,7 +89,7 @@ typedef struct {
     int max_health;
     int n_turn;
     int max_turns; // max turns per 'turn'
-    bool async_move;
+    bool sync_move;
     //bool rethink_move;
     //bool finished_turn;
     int cur_move_anim_extra_frame;

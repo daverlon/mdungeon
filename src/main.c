@@ -317,7 +317,6 @@ void reset_entity_state(Entity* ent, bool use_turn) {
         ent->n_turn++;
         ent->attack_damage_given = false;
     }
-    //ent->prevent_pickup = false;
 }
 
 void move_entity_forward(Entity* ent) {
@@ -650,7 +649,7 @@ void switch_to_idle_y_offset(Entity* ent) {
 		ent->cur_move_anim_extra_frame++;
 	}
 	if (ent->cur_move_anim_extra_frame >= MOVE_ANIMATION_EXTRA_FRAMES) {
-		ent->animation.max_frame_time = 0.02f;
+		//ent->animation.max_frame_time = 0.02f;
 		ent->animation.y_offset = 0;
 	}
 }
@@ -661,8 +660,7 @@ void update_animation_state(Entity* ent) {
         switch (ent->state) {
         case IDLE: {
 
-            // n ticks delay to return to idle animation
-            // assumes that idle animation y offset is always 0
+            ent->animation.max_frame_time = 0.020f;
             switch_to_idle_y_offset(ent);
             
             break;
@@ -744,8 +742,6 @@ void update_animation_state(Entity* ent) {
 	if (ent->state != IDLE) {
 		ent->cur_move_anim_extra_frame = 0;
 	}
-
-    update_animation(&ent->animation);
 }
 
 Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* item_data, const EntityData* entity_data) {
@@ -1103,9 +1099,9 @@ bool entity_finished_turn(Entity* ent) {
     return (ent->state == IDLE && ent->n_turn >= ent->max_turns);
 }
 
-bool async_moving_entity_exists(EntityData* entity_data) {
+bool sync_moving_entity_exists(EntityData* entity_data) {
     for (int i = 0; i < entity_data->entity_counter; i++) {
-        if (entity_data->entities[i].async_move)
+        if (entity_data->entities[i].sync_move)
             return true;
     }
     return false;
@@ -1142,9 +1138,9 @@ void process_attack(Entity* ent, EntityData* entity_data) {
         if (any_entity_exists_on_tile(tile.x, tile.y, entity_data, NULL, &id)) {
             if (!ent->attack_damage_given) {
                 if (ent->animation.cur_frame > 7) {
-                entity_data->entities[id].health -= damage;
-                ent->attack_damage_given = true;
-            }
+					entity_data->entities[id].health -= damage;
+					ent->attack_damage_given = true;
+				}
             }
         }
         break;
@@ -1193,7 +1189,7 @@ int main(void/*int argc, char* argv[]*/) {
     //SetWindowState(FLAG_WINDOW_MAXIMIZED);
     //SetTargetFPS(30);
 
-    SetRandomSeed(1337);
+    SetRandomSeed(499);
 
     Camera2D camera = { 0 };
     {
@@ -1258,9 +1254,9 @@ int main(void/*int argc, char* argv[]*/) {
 					.ent_type = ENT_ZOR,
 						.texture = LOAD_ZOR_TEXTURE(),
 						.animation = (Animation){ .n_frames = 20 },
-						.health = 35,
-						.max_health = 35,
-						.max_turns = 1,
+						.health = 100,
+						.max_health = 100,
+						.max_turns = 2,
                         .inventory_size = 3
 				});
 				zor = GET_LAST_ENTITY_REF();
@@ -1274,19 +1270,20 @@ int main(void/*int argc, char* argv[]*/) {
                         .max_turns = 1
                 });*/
 
-                int ents = GetRandomValue(4, 7);
+                //int ents = GetRandomValue(4, 7);
+                int ents = 1;
                 for (int i = 0; i < ents; i++)
 					create_entity_instance(&entity_data, (Entity) {
 						.ent_type = ENT_FLY,
 							.texture = LOAD_FLY_TEXTURE(),
 							.animation = (Animation){ .n_frames = 10 },
-							.health = 14,
-							.max_health = 14,
+							.health = 100,
+							.max_health = 100,
 							.can_swap_positions = false,
 							.max_turns = 1,
 							.inventory_size = 2
 					});
-                ents = GetRandomValue(2, 4);
+                //ents = GetRandomValue(2, 4);
 
                 nullify_all_items(&item_data);
                 spawn_items(ITEM_STICK, &item_data, &map_data, 5, 8);
@@ -1390,28 +1387,30 @@ int main(void/*int argc, char* argv[]*/) {
         // ================================================================== //
 
         // debug statements
-        /*printf("\nEntity turn id: %i\n", cur_turn_entity_index);
+        printf("\nEntity turn id: %i\n", cur_turn_entity_index);
         for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
-            printf("Entity %i state %i async %i ||| turn %i/%i\n", i, ent->state, (int)ent->async_move, ent->n_turn, ent->max_turns);
-        }*/
+            printf("Entity %i state %i async %i ||| turn %i/%i ||| maxframe %.5f\n", i, ent->state, (int)ent->sync_move, ent->n_turn, ent->max_turns, ent->animation.max_frame_time);
+        }
 
-        // process entities who are async moving
-        if (async_moving_entity_exists(&entity_data)) {
+
+        // process entities who are in sync moving
+        if (sync_moving_entity_exists(&entity_data)) {
 
             for (int i = 0; i < entity_data.entity_counter; i++) {
                 Entity* ent = &entity_data.entities[i];
 
-                if (!ent->async_move) continue;
-
+                if (!ent->sync_move)
+                    continue;
+                
                 if (entity_finished_turn(ent)) {
-                    // when an async entity has finished their turn
+                    // when an in sync entity has finished their turn
                     cur_turn_entity_index++;
                     ent->n_turn = 0;
                     if (cur_turn_entity_index >= entity_data.entity_counter) {
                         cur_turn_entity_index = 0;
                     }
-                    ent->async_move = false;
+                    ent->sync_move = false;
                 }
                 else {
                     // if not, rethink turn and process it
@@ -1423,28 +1422,30 @@ int main(void/*int argc, char* argv[]*/) {
             }
         }
         else {
-            // no async moving entities exist currently
+            // no sync moving entities exist currently
 
             Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
 
             entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
 
-            // check if async entities should exist for this turn
+            // check if sync entities should exist for this turn
             // and log them
             if (this_ent->state == MOVE) {
                 for (int i = cur_turn_entity_index + 1; i < entity_data.entity_counter; i++) {
                     Entity* ent = &entity_data.entities[i];
                     entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
                     if (ent->state != MOVE && ent->state != SKIP_TURN) {
+                        reset_entity_state(ent, false);
                         break;
                     }
-                    this_ent->async_move = true;
-                    ent->async_move = true;
+                    this_ent->sync_move = true;
+                    ent->sync_move = true;
                 }
             }
 
+
             // if there are none, process individual entity as normal
-            if (!async_moving_entity_exists(&entity_data)) {
+            if (!sync_moving_entity_exists(&entity_data)) {
 
                 Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
 
@@ -1468,11 +1469,16 @@ int main(void/*int argc, char* argv[]*/) {
 
         // ================================================================== //
 
+        
         for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
-            update_animation_state(ent);
+
+			update_animation_state(ent);
+            update_animation(&ent->animation);
+
 			scan_items_for_pickup(&item_data, ent);
         }
+
 
         Vector2 cam_target = { 0 };
         if (zor->state == ATTACK_MELEE) {
