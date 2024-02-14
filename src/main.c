@@ -1493,8 +1493,7 @@ int main(void/*int argc, char* argv[]*/) {
 
             if (ent->health <= 0) {
                 if (i == 0) { // player die
-                    set_gamestate(&gsi, GS_INTRO_DUNGEON);
-                    continue;
+                    //continue;
                 }
                     
                 drop_random_item(ent, &item_data);
