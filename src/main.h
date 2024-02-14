@@ -71,14 +71,16 @@ typedef struct {
     Texture2D texture;
     Animation animation;
     enum EntityState state;
+    //bool attack_animation_playing;
     enum EntityState next_state;
     enum Direction direction;
     //bool should_move;
     //Vector2 target_position;
     enum ItemType inventory[32];
     enum ItemType equipped_item;
+    int inventory_size;
     int inventory_item_count;
-    bool prevent_pickup;// temporary prevention to pickup dropped items
+    //bool prevent_pickup;// temporary prevention to pickup dropped items
     bool can_pickup; // whether they can actaully pickup items in general
     Vector2 original_position;
     float lunge_progress;
@@ -102,11 +104,3 @@ typedef struct {
     Entity entities[MAX_INSTANCES];
     int entity_counter;
 } EntityData;
-
-//typedef struct {
-//    Vector2 position; // grid coordinate position
-//    int damage;
-//    bool damaged;
-//} DamageTile;
-//
-//#define MAX_DAMAGE_TILES 64
