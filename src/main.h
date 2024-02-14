@@ -76,6 +76,7 @@ typedef struct {
     //bool should_move;
     //Vector2 target_position;
     enum ItemType inventory[32];
+    enum ItemType equipped_item;
     int inventory_item_count;
     bool prevent_pickup;// temporary prevention to pickup dropped items
     bool can_pickup; // whether they can actaully pickup items in general
@@ -83,14 +84,29 @@ typedef struct {
     float lunge_progress;
     bool can_swap_positions;
     int health;
+    int max_health;
     int n_turn;
     int max_turns; // max turns per 'turn'
     bool async_move;
     //bool rethink_move;
     //bool finished_turn;
+    int cur_move_anim_extra_frame;
+    bool attack_damage_given; // when the attack damage is complete
+    //int attack_damage;
+
 } Entity;
+
+#define MOVE_ANIMATION_EXTRA_FRAMES 3
 
 typedef struct {
     Entity entities[MAX_INSTANCES];
     int entity_counter;
 } EntityData;
+
+//typedef struct {
+//    Vector2 position; // grid coordinate position
+//    int damage;
+//    bool damaged;
+//} DamageTile;
+//
+//#define MAX_DAMAGE_TILES 64

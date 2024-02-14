@@ -259,8 +259,10 @@ bool entity_exists_on_tile(int col, int row, Entity* ent) {
 void reset_entity_state(Entity* ent, bool use_turn) {
     ent->state = IDLE;
     ent->original_position = ent->position;
-    if (use_turn)
+    if (use_turn) {
         ent->n_turn++;
+        ent->attack_damage_given = false;
+    }
 }
 
 void move_entity_forward(Entity* ent) {
@@ -389,14 +391,15 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
         int swapi = -1;
         if (entity_exists_on_tile(i_targ_x, i_targ_y, entity_data, ent, &swapi, false)) {
             //printf("Tried to walk on tile with entity\n");
-            if (!entity_data->entities[swapi].can_swap_positions) {
-                /*ent->should_move = false;
-                ent->state = IDLE;*/
-                //ent->state = IDLE;
-                //should_move = false;
-                reset_entity_state(ent, false);
-                return;
-            }
+            if (swapi != -1)
+				if (!entity_data->entities[swapi].can_swap_positions) {
+					/*ent->should_move = false;
+					ent->state = IDLE;*/
+					//ent->state = IDLE;
+					//should_move = false;
+					reset_entity_state(ent, false);
+					return;
+				}
             //else if (entity_data->entities[swapi].can_swap_positions) {
             //    swap_entity_positions(en, &entity_data->entities[swapi]);
             //   /* ent->should_move = false;
@@ -521,7 +524,7 @@ void render_entity(Entity* ent) {
         BLUE
     );
 
-    // DrawRectangleLines(
+	// DrawRectangleLines(
     //  gridPosition.x, gridPosition.y, SPRITE_SIZE, SPRITE_SIZE, BLACK);
     DrawTextureRec(
         ent->texture,
@@ -534,6 +537,16 @@ void render_entity(Entity* ent) {
         grid_position,
             WHITE
             );
+
+
+	// hp bar width
+    int hp_bar_x = grid_position.x + TILE_SIZE / 2.5;
+    int hp_bar_y = grid_position.y + SPRITE_SIZE / 1.2;
+    int hp_bar_height = 20;
+    int hp_bar_width = TILE_SIZE;
+    int hp_cur_width = ((float)ent->health / (float)ent->max_health) * (float)hp_bar_width;
+    DrawRectangle(hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height, BLACK);
+    DrawRectangle(hp_bar_x, hp_bar_y, hp_cur_width, hp_bar_height, GREEN);
 }
 
 void lunge_entity(Entity* ent) {
@@ -563,23 +576,37 @@ void lunge_entity(Entity* ent) {
     }
 }
 
+void switch_to_idle_y_offset(Entity* ent) {
+	if (ent->animation.y_offset != 0) {
+		ent->cur_move_anim_extra_frame++;
+	}
+	if (ent->cur_move_anim_extra_frame >= MOVE_ANIMATION_EXTRA_FRAMES) {
+		ent->animation.max_frame_time = 0.02f;
+		ent->animation.y_offset = 0;
+	}
+}
+
 void update_animation_state(Entity* ent) {
     switch (ent->ent_type) {
     case ENT_ZOR: {
         switch (ent->state) {
         case IDLE: {
-            ent->animation.max_frame_time = 0.02f;
-            ent->animation.y_offset = 0;
+
+            // n ticks delay to return to idle animation
+            // assumes that idle animation y offset is always 0
+            switch_to_idle_y_offset(ent);
+            
             break;
         }
         case MOVE: {
             ent->animation.max_frame_time = 0.030f;
-            ent->animation.y_offset = 2048;
+			ent->animation.y_offset = 2048;
             break;
         }
         case ATTACK_MELEE: {
             ent->animation.max_frame_time = 0.017f;
             ent->animation.y_offset = 2048 + 2048;
+            //ent->cur_move_anim_extra_frame = 0;
             break;
         }
         default: {
@@ -592,7 +619,8 @@ void update_animation_state(Entity* ent) {
         switch (ent->state) {
         case IDLE: {
             ent->animation.max_frame_time = 0.017f;
-            ent->animation.y_offset = 0;
+            switch_to_idle_y_offset(ent);
+
             break;
         }
         case ATTACK_MELEE: {
@@ -608,7 +636,8 @@ void update_animation_state(Entity* ent) {
         switch (ent->state) {
         case IDLE: {
             ent->animation.max_frame_time = 0.019f;
-            ent->animation.y_offset = 0;
+            switch_to_idle_y_offset(ent);
+
             break;
         }
         case ATTACK_MELEE: {
@@ -624,7 +653,8 @@ void update_animation_state(Entity* ent) {
         switch (ent->state) {
         case IDLE: {
             ent->animation.max_frame_time = 0.037f;
-            ent->animation.y_offset = 0;
+            switch_to_idle_y_offset(ent);
+
             break;
         }
         case ATTACK_MELEE: {
@@ -641,6 +671,11 @@ void update_animation_state(Entity* ent) {
     default:
         break;
     }
+
+	if (ent->state != IDLE) {
+		ent->cur_move_anim_extra_frame = 0;
+	}
+
     update_animation(&ent->animation);
 }
 
@@ -854,16 +889,22 @@ void create_entity_instance(EntityData* entity_data, Entity ent) {
 }
 
 void remove_entity(const int index, EntityData* entity_data) {
-    if (index >= entity_data->entity_counter) {
-        printf("Warning: Tried to delete entity index %i, instance counter: %i\n", index, entity_data->entity_counter);
+    if (index < 0 || index >= entity_data->entity_counter) {
+        printf("Warning: Tried to delete entity with invalid index %i, instance counter: %i\n", index, entity_data->entity_counter);
         return;
     }
-    for (int i = 0; i < entity_data->entity_counter; i++) {
+
+    // Shift entities down to fill the gap left by the removed entity
+    for (int i = index; i < entity_data->entity_counter - 1; i++) {
         entity_data->entities[i] = entity_data->entities[i + 1];
     }
+
+    // Decrement the counter since one entity has been removed
     entity_data->entity_counter--;
+
     printf("Deleted entity index %i, %i instances left on map.\n", index, entity_data->entity_counter);
 }
+
 
 void generate_enchanted_groves_dungeon_texture(const MapData* map_data, RenderTexture2D* dungeon_texture/*DungeonTexture* dungeon_texture*/) {
     Texture2D floor_texture = LOAD_FOREST_GRASS_TILES_TEXTURE();
@@ -1040,7 +1081,50 @@ bool async_moving_entity_exists(EntityData* entity_data) {
     return false;
 }
 
-void process_entity_state(Entity* ent) {
+int melee_attack_damage(Entity* ent) {
+	int damage = 3;
+
+	switch (ent->equipped_item) {
+	case ITEM_NOTHING: {
+		break;
+	}
+	case ITEM_STICK: {
+		damage = 7;
+		break;
+	}
+	default:
+		break;
+	}
+
+    return damage;
+}
+
+void process_attack(Entity* ent, EntityData* entity_data) {
+    enum EntityState attack_state = ent->state;
+
+    switch (attack_state) {
+    case ATTACK_MELEE: {
+        
+        Vector2 tile = get_tile_infront_entity(ent);
+
+        int damage = melee_attack_damage(ent);
+        int id = 0;
+        if (any_entity_exists_on_tile(tile.x, tile.y, entity_data, NULL, &id)) {
+            if (!ent->attack_damage_given) {
+                entity_data->entities[id].health -= damage;
+            }
+        }
+		ent->attack_damage_given = true;
+        break;
+    }
+    default: {
+        //printf("Error: invalid attack state given.\n");
+        break;
+    }
+    }
+}
+
+void process_entity_state(Entity* ent, EntityData* entity_data) {
     switch (ent->state) {
     case IDLE: {
         // not really supposed to trigger here
@@ -1056,6 +1140,7 @@ void process_entity_state(Entity* ent) {
     }
     case ATTACK_MELEE: {
         lunge_entity(ent);
+        process_attack(ent, entity_data);
         break;
     }
     default:
@@ -1095,8 +1180,9 @@ int main(void/*int argc, char* argv[]*/) {
         .ent_type = ENT_ZOR,
             .texture = LOAD_ZOR_TEXTURE(),
             .animation = (Animation){ .n_frames = 20 },
-            .health = 100,
-            .max_turns = 1
+            .health = 25,
+            .max_health = 25,
+            .max_turns = 2
     });
     zor = GET_LAST_ENTITY_REF();
 
@@ -1122,7 +1208,8 @@ int main(void/*int argc, char* argv[]*/) {
         .ent_type = ENT_FLY,
             .texture = LOAD_FLY_TEXTURE(),
             .animation = (Animation){ .n_frames = 10 },
-            .health = 100,
+            .health = 14,
+            .max_health = 14,
             .can_swap_positions = false,
             .max_turns = 1
     });
@@ -1130,7 +1217,8 @@ int main(void/*int argc, char* argv[]*/) {
         .ent_type = ENT_FLY,
             .texture = LOAD_FLY_TEXTURE(),
             .animation = (Animation){ .n_frames = 10 },
-            .health = 100,
+            .health = 14,
+            .max_health = 14,
             .can_swap_positions = false,
             .max_turns = 1
     });
@@ -1146,6 +1234,7 @@ int main(void/*int argc, char* argv[]*/) {
     RenderTexture2D dungeon_texture = { 0 };
 
     MapData map_data = { 0 };
+    //DamageTile damage_tiles[MAX_DAMAGE_TILES] = { 0 };
 
     /*int async_move_ents[MAX_INSTANCES];
     int async_move_ents_counter = 0;*/
@@ -1268,11 +1357,12 @@ int main(void/*int argc, char* argv[]*/) {
 
         // ================================================================== //
 
-        printf("\nEntity turn id: %i\n", cur_turn_entity_index);
+        // debug statements
+        /*printf("\nEntity turn id: %i\n", cur_turn_entity_index);
         for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
-            printf("Entity %i state %i async %i\n", i, ent->state, (int)ent->async_move);
-        }
+            printf("Entity %i state %i async %i ||| turn %i/%i\n", i, ent->state, (int)ent->async_move, ent->n_turn, ent->max_turns);
+        }*/
 
         // process entities who are async moving
         if (async_moving_entity_exists(&entity_data)) {
@@ -1282,7 +1372,7 @@ int main(void/*int argc, char* argv[]*/) {
 
                 if (!ent->async_move) continue;
 
-                if (entity_finished_turn(ent)) {
+                if (entity_finished_turn(ent) || ent->state == IDLE) {
                     // when an async entity has finished their turn
                     cur_turn_entity_index++;
                     ent->n_turn = 0;
@@ -1295,12 +1385,8 @@ int main(void/*int argc, char* argv[]*/) {
                     // if not, rethink turn and process it
                     if (ent->state == IDLE || ent->state == SKIP_TURN) {
                         entity_think(ent, zor, &map_data, &entity_data);
-                        // should still skip?
-                        //if (ent->state == SKIP_TURN) {
-                        //    continue;
-                        //}
                     }
-					process_entity_state(ent);
+                    process_entity_state(ent, &entity_data);
                 }
             }
         }
@@ -1332,7 +1418,7 @@ int main(void/*int argc, char* argv[]*/) {
 
                 entity_think(this_ent, zor, &map_data, &entity_data);
 
-                process_entity_state(this_ent);
+                process_entity_state(this_ent, &entity_data);
 
                 // entity finished turn?
                 if (entity_finished_turn(this_ent)) {
@@ -1350,6 +1436,19 @@ int main(void/*int argc, char* argv[]*/) {
         }
 
         // ================================================================== //
+
+		// check for ents who are dead
+        for (int i = 0; i < entity_data.entity_counter; ) {
+            Entity* ent = &entity_data.entities[i];
+            if (ent->health <= 0) {
+                remove_entity(i, &entity_data);
+                // Don't increment i, as we want to check the new entity that's now at index i
+            }
+            else {
+                // Only increment i if no entity was removed
+                i++;
+            }
+        }
 
         for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
