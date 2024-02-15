@@ -26,13 +26,24 @@ enum EntityState {
 
 enum ItemType {
     ITEM_NOTHING,
+
+    // consumables
+    ITEM_APPLE,
     ITEM_SPILLEDCUP,
-    ITEM_STICK,
-    ITEM_APPLE
+
+    // weapons
+    ITEM_STICK
+};
+
+enum ItemCategory {
+    ITEMCAT_NOTHING, // error
+    ITEMCAT_WEAPON,
+    ITEMCAT_CONSUMABLE
 };
 
 typedef struct {
     enum ItemType type;
+    enum ItemCategory cat;
     Vector2 position; // grid coordinate position
     // for player to ignore item once dropped
     // enemies should still be able to pickup the item (perhaps some won't want to though)

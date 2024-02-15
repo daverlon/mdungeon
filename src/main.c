@@ -297,7 +297,8 @@ void move_entity_forward(Entity* ent) {
 
     float distance_to_target = Vector2Distance(ent->position, targ);
 
-    float max_move_distance = GetFrameTime() * GRID_MOVESPEED;
+    //float max_move_distance = GetFrameTime() * GRID_MOVESPEED;
+    float max_move_distance = GetFrameTime() * (IsKeyDown(KEY_LEFT_SHIFT) ? GRID_MOVESPEED * 2 : GRID_MOVESPEED);
 
     if (max_move_distance >= distance_to_target) {
         ent->position = targ;
@@ -753,8 +754,6 @@ void create_item_instance(Item item, ItemData* item_data) {
         return;
     }
 
-    int hp = 100;
-
     item_data->items[item_data->item_counter] = item;
     item_data->item_counter++;
     printf("Created item. Counter: %i\n", item_data->item_counter);
@@ -773,7 +772,7 @@ void delete_item(const int index, ItemData* item_data) {
     printf("Deleted item index: %i, %i instances left on map.\n", index, item_data->item_counter);
 }
 
-void spawn_items(enum ItemType item_type, ItemData* item_data, const MapData* map_data, int min, int max) {
+void spawn_items_on_random_tiles(Item item, ItemData* item_data, const MapData* map_data, int min, int max) {
     if (item_data->item_counter >= MAX_INSTANCES || item_data->item_counter + max >= MAX_INSTANCES) {
         printf("Error: [Spawn Items] mapItemCounter already at maximum instances.\n");
         return;
@@ -802,15 +801,16 @@ void spawn_items(enum ItemType item_type, ItemData* item_data, const MapData* ma
         if (position_taken) continue;
         printf("Creating spilledcup at %i, %i\n", col, row);
         // found valid tile
-        int hp = 100;
-        create_item_instance((Item) { item_type, (Vector2) { col, row }, hp }, item_data);
+        item.position = (Vector2){ col, row };
+        item.hp = 100;
+        create_item_instance(item, item_data);
         item_counter++;
     }
 }
 
 void nullify_all_items(ItemData* item_data) {
     for (int i = 0; i < MAX_INSTANCES; i++) {
-        item_data->items[i] = (Item){ ITEM_NOTHING, (Vector2) { 0, 0 } };
+        item_data->items[i] = (Item){ ITEM_NOTHING, ITEMCAT_NOTHING, (Vector2) { 0, 0 } };
     }
     item_data->item_counter = 0;
     printf("Set every item to ITEM_NOTHING\n");
@@ -1260,18 +1260,27 @@ int value_variation(int value, int percentage) {
 }
 
 int get_melee_attack_damage(Entity* ent, int *self_damage) {
-    int damage = ent->atk;
+    float damage = (float)ent->atk;
 
     // todo: ui etc for equipped item
     if (ent->inventory_item_count <= 0) return;
 
-	//switch (ent->equipped_item) {
     switch (ent->inventory[ent->equipped_item_index].type) {
-	case ITEM_NOTHING: {
-		break;
-	}
+    case ITEM_NOTHING: {
+        break;
+    }
+    case ITEM_APPLE: {
+        damage += 5.0f;
+        *self_damage = 100;
+        break;
+    }
+    case ITEM_SPILLEDCUP: {
+        damage += 4.0f;
+        *self_damage = 100;
+        break;
+    }
 	case ITEM_STICK: {
-		damage *= 2;
+		damage *= 2.5f;
         *self_damage = 50;
 		break;
 	}
@@ -1319,7 +1328,7 @@ void process_attack(Entity* ent, EntityData* entity_data) {
                 if (ent->animation.cur_frame > 7) {
                     int self_damage = 0;
 					int damage = get_melee_attack_damage(ent, &self_damage);
-                    printf("Self damage %i\n", self_damage);
+                    printf("Damage: %i ||| Self Damage: %i\n", damage, self_damage);
                     ent->inventory[ent->equipped_item_index].hp -= self_damage;
                     apply_damage(&entity_data->entities[id], ent, damage, true);
 				}
@@ -1332,7 +1341,7 @@ void process_attack(Entity* ent, EntityData* entity_data) {
         break;
     }
     }
-    if (ent->inventory[ent->equipped_item_index].hp <= 0) {
+    if (ent->inventory[ent->equipped_item_index].type != ITEM_NOTHING && ent->inventory[ent->equipped_item_index].hp <= 0) {
         delete_item_from_entity_inventory(ent->equipped_item_index, ent);
     }
 }
@@ -1447,6 +1456,7 @@ int main(void/*int argc, char* argv[]*/) {
 				// init the entities
                 create_entity_instance(&entity_data, default_ent_zor());
 				zor = GET_LAST_ENTITY_REF();
+                zor->max_turns = 2;
 
                 //int ents = GetRandomValue(4, 7);
                 int ents = 4;
@@ -1455,9 +1465,9 @@ int main(void/*int argc, char* argv[]*/) {
                         
 				nullify_all_items(&item_data);
 
-                spawn_items(ITEM_STICK, &item_data, &map_data, 5, 8);
-                spawn_items(ITEM_APPLE, &item_data, &map_data, 4, 7);
-                spawn_items(ITEM_SPILLEDCUP, &item_data, &map_data, 2, 4);
+                spawn_items_on_random_tiles((Item){ITEM_STICK, ITEMCAT_WEAPON}, & item_data, & map_data, 5, 8);
+                spawn_items_on_random_tiles((Item) { ITEM_APPLE, ITEMCAT_CONSUMABLE }, &item_data, &map_data, 4, 7);
+                spawn_items_on_random_tiles((Item) { ITEM_SPILLEDCUP, ITEMCAT_CONSUMABLE }, &item_data, &map_data, 2, 4);
 
                 for (int i = 0; i < entity_data.entity_counter; i++) {
                     Entity* ent = &entity_data.entities[i];
@@ -1471,63 +1481,6 @@ int main(void/*int argc, char* argv[]*/) {
             if (IsKeyPressed(KEY_R)) {
                 set_gamestate(&gsi, GS_INTRO_DUNGEON);
                 entity_data.entity_counter = 0;
-            }
-            break;
-        }
-        case GS_ADVANCED_DUNGEON: {
-            if (!gsi.init) {
-                // reset tilemap texture 
-                Texture2D texture_dungeon_floor_tilemap = LOAD_DESERT_TILES_TEXTURE();
-                cur_turn_entity_index = 0;
-                // reset dungeon floor texture
-                UnloadRenderTexture(dungeon_texture);
-
-                map_data = generate_map(DUNGEON_PRESET_ADVANCED);
-                dungeon_texture = LoadRenderTexture(map_data.cols * TILE_SIZE, map_data.rows * TILE_SIZE);
-
-                //for (int row = 0; row < map_data.rows; row++) {
-                BeginTextureMode(dungeon_texture);
-                for (int row = 0; row < map_data.rows; row++) {
-                    for (int col = 0; col < map_data.cols; col++) {
-                        switch (map_data.tiles[col][row]) {
-                        case TILE_FLOOR:
-                        case TILE_CORRIDOR:
-                        case TILE_ROOM_ENTRANCE: {
-                            DrawTextureRec(
-                                texture_dungeon_floor_tilemap,
-                                (Rectangle) {
-                                TILE_SIZE* GetRandomValue(0, 8), 0, TILE_SIZE, TILE_SIZE
-                            },
-                                (Vector2) {
-                                col* TILE_SIZE, ((map_data.rows - row - 1) * TILE_SIZE)
-                            }, WHITE);
-                            break;
-                        }
-                        default: {
-                            break;
-                        }
-                        }
-                    }
-                }
-                EndTextureMode();
-
-                UnloadTexture(texture_dungeon_floor_tilemap);
-
-                // items
-                nullify_all_items(&item_data);
-                spawn_items(ITEM_SPILLEDCUP, &item_data, &map_data, 1, 3);
-                spawn_items(ITEM_STICK, &item_data, &map_data, 4, 8);
-                spawn_items(ITEM_APPLE, &item_data, &map_data, 2, 5);
-                for (int i = 0; i < entity_data.entity_counter; i++) {
-                    Entity* ent = &entity_data.entities[i];
-                    reset_entity_state(ent, false);
-                    set_entity_position(ent, find_random_empty_floor_tile(&map_data, &item_data, &entity_data));
-                }
-                printf("Init advanced dungeon.\n");
-                gsi.init = true;
-            }
-            if (IsKeyPressed(KEY_R)) {
-                set_gamestate(&gsi, GS_INTRO_DUNGEON);
             }
             break;
         }
