@@ -330,7 +330,7 @@ void swap_entity_positions(Entity* ent1, Entity* ent2) {
     ent2->state = MOVE;
 }
 
-void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], EntityData* entity_data, ItemData* item_data, Vector2 grid_mouse_position) {
+void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, ItemData* item_data, Vector2 grid_mouse_position) {
 
     // if no key is held, ensure that isMoving is set to false
     if (ent->state != IDLE) return;
@@ -420,8 +420,8 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
         //
         // diagonal block
         if (movement.x != 0.0f && movement.y != 0.0f) {
-            if (tiles[i_targ_x][(int)ent->position.y] == TILE_WALL
-                || tiles[(int)ent->position.x][i_targ_y] == TILE_WALL) {
+            if (map_data->tiles[i_targ_x][(int)ent->position.y].type == TILE_WALL
+                || map_data->tiles[(int)ent->position.x][i_targ_y].type == TILE_WALL) {
                 reset_entity_state(ent, false);
                 return;
             }
@@ -429,7 +429,7 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
 
         // entity block/swap
         int swapi = -1;
-        if (any_entity_exists_on_tile(i_targ_x, i_targ_y, entity_data, ent, &swapi, NULL)) {
+        if (any_entity_exists_on_tile(i_targ_x, i_targ_y, entity_data, ent, &swapi)) {
             //printf("Tried to walk on tile with entity\n");
             if (swapi != -1)
 				if (!entity_data->entities[swapi].can_swap_positions) {
@@ -454,7 +454,7 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
             }*/
         }
 
-        switch (tiles[i_targ_x][i_targ_y]) {
+        switch (map_data->tiles[i_targ_x][i_targ_y].type) {
         case TILE_WALL: {
             // printf("Invalid movement.!\n");
             reset_entity_state(ent, false);
@@ -469,7 +469,7 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
             break;
         }
         default: {
-            printf("Error (MOVEMENT) invalid tile detected?: %i\n", tiles[i_targ_x][i_targ_y]);
+            printf("Error (MOVEMENT) invalid tile detected?: %i\n", map_data->tiles[i_targ_x][i_targ_y].type);
             break;
         }
         }
@@ -725,14 +725,14 @@ Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* it
         row = GetRandomValue(0, MAX_ROWS);
 
         // check if tile is TILE_FLOOR
-        if (map_data->tiles[col][row] != TILE_FLOOR)
+        if (map_data->tiles[col][row].type != TILE_FLOOR)
             continue;
 
         // check if item exists on tile
         if (item_exists_on_tile(col, row, item_data))
             continue;
 
-        if (any_entity_exists_on_tile(col, row, entity_data, NULL, NULL, NULL))
+        if (any_entity_exists_on_tile(col, row, entity_data, NULL, NULL))
             continue;
 
         // todo:
@@ -784,7 +784,7 @@ void spawn_items_on_random_tiles(Item item, ItemData* item_data, const MapData* 
         //for (int i = 0; i < n_spilledcups; i++) {
         int col = GetRandomValue(0, MAX_COLS);
         int row = GetRandomValue(0, MAX_ROWS);
-        if (map_data->tiles[col][row] != TILE_FLOOR)
+        if (map_data->tiles[col][row].type != TILE_FLOOR)
             continue;
         // tile is floor
         bool position_taken = false;
@@ -1031,7 +1031,7 @@ void generate_enchanted_groves_dungeon_texture(MapData* map_data, RenderTexture2
         // generate floor layer
         for (int row = 0; row < map_data->rows; row++) {
             for (int col = 0; col < map_data->cols; col++) {
-                switch (map_data->tiles[col][row]) {
+                switch (map_data->tiles[col][row].type) {
                 case TILE_WALL:
                 case TILE_CORRIDOR:
                 case TILE_ROOM_ENTRANCE:
@@ -1064,7 +1064,7 @@ void generate_enchanted_groves_dungeon_texture(MapData* map_data, RenderTexture2
         // generate terrain layer
         for (int row = 0; row < map_data->rows; row++) {
             for (int col = 0; col < map_data->cols; col++) {
-                switch (map_data->tiles[col][row]) {
+                switch (map_data->tiles[col][row].type) {
                 case TILE_WALL:
                     DrawTextureRec(
                         terrain_texture,
@@ -1231,7 +1231,7 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
     // player is usually entity index 0
     if (ent == player) {
         // get player next action
-        control_entity(ent, map_data->tiles, entity_data, item_data, grid_mouse_position);
+        control_entity(ent, map_data, entity_data, item_data, grid_mouse_position);
     }
     else {
         switch (ent->ent_type) {
@@ -1271,7 +1271,7 @@ int get_melee_attack_damage(Entity* ent, int *self_damage) {
     float damage = (float)ent->atk;
 
     // todo: ui etc for equipped item
-    if (ent->inventory_item_count <= 0) return;
+    if (ent->inventory_item_count <= 0) return (int)roundf(damage);
 
     switch (ent->inventory[ent->equipped_item_index].type) {
     case ITEM_NOTHING: {
@@ -1401,7 +1401,7 @@ int main(void/*int argc, char* argv[]*/) {
 
     SetRandomSeed(99);
 
-    Font fonts[1];
+    Font fonts[1] = { 0 };
     fonts[0] = LoadFontEx("res/fonts/YanoneKaffeesatz-Regular.ttf", 144, NULL, NULL);
     SetTextureFilter(fonts[0].texture, TEXTURE_FILTER_POINT);
 
@@ -1650,7 +1650,7 @@ int main(void/*int argc, char* argv[]*/) {
         if (IsKeyPressed(KEY_V)) {
             for (int row = 0; row < map_data.rows; row++) {
                 for (int col = 0; col < map_data.cols; col++) {
-                    switch (map_data.tiles[col][row]) {
+                    switch (map_data.tiles[col][row].type) {
                     case TILE_WALL: {
                         printf("~ ");
                         break;
@@ -1670,7 +1670,7 @@ int main(void/*int argc, char* argv[]*/) {
                         break;
                     }
                     default: {
-                        printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, map_data.tiles[col][row]);
+                        printf("Error (RENDER): Unknown tile type found on map. (%i, %i) = %i\n", col, row, map_data.tiles[col][row].type);
                         // printf("? ");
                         break;
                     }
@@ -1701,7 +1701,7 @@ int main(void/*int argc, char* argv[]*/) {
 				for (int row = 0; row < map_data.rows; row++) {
 					for (int col = 0; col < map_data.cols; col++) {
 						Color clr = LIGHTGREEN;
-						if (IsKeyDown(KEY_SPACE) && map_data.tiles[col][row] != TILE_WALL) {
+						if (IsKeyDown(KEY_SPACE) && map_data.tiles[col][row].type != TILE_WALL) {
 							Color clr = BLACK_SEMI_TRANSPARENT;
 
 							grid_mouse_position = GetMousePosition();

@@ -7,16 +7,16 @@
 #include "main.h"
 #include "dungeon.h"
 
-void print_map(int cols, int rows, enum TileType tiles[MAX_COLS][MAX_ROWS]) {
+void print_map(int cols, int rows, TileData tiles[MAX_COLS][MAX_ROWS]) {
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
-            printf("%d ", tiles[col][row]);
+            printf("%d ", tiles[col][row].type);
         }
         printf("\n");
     }
 }
 
-void connect_rooms(Room *room1, Room *room2, enum TileType tiles[MAX_COLS][MAX_ROWS], int bend_chance) {
+void connect_rooms(Room *room1, Room *room2, TileData tiles[MAX_COLS][MAX_ROWS], int bend_chance) {
     // Calculate the centers of the two rooms
     int center1_x = room1->x + room1->cols / 2;
     int center1_y = room1->y + room1->rows / 2;
@@ -29,11 +29,11 @@ void connect_rooms(Room *room1, Room *room2, enum TileType tiles[MAX_COLS][MAX_R
     int row = center1_y;
 
     while (col != center2_x || row != center2_y) {
-        if (tiles[col][row] == TILE_WALL) {
+        if (tiles[col][row].type == TILE_WALL) {
             // Mark the wall or corridor as corridor
-            tiles[col][row] = TILE_CORRIDOR;
+            tiles[col][row].type = TILE_CORRIDOR;
         }
-        else if (tiles[col][row] == TILE_FLOOR) {
+        else if (tiles[col][row].type == TILE_FLOOR) {
             // Mark the tiles where a corridor meets a room as entrance points
             if ((col > room1->x && col < room1->x + room1->cols - 1 && row == room1->y) ||
                 (col > room1->x && col < room1->x + room1->cols - 1 && row == room1->y + room1->rows - 1) ||
@@ -43,10 +43,10 @@ void connect_rooms(Room *room1, Room *room2, enum TileType tiles[MAX_COLS][MAX_R
                 (col > room2->x && col < room2->x + room2->cols - 1 && row == room2->y + room2->rows - 1) ||
                 (row > room2->y && row < room2->y + room2->rows - 1 && col == room2->x) ||
                 (row > room2->y && row < room2->y + room2->rows - 1 && col == room2->x + room2->cols - 1)) {
-                tiles[col][row] = TILE_ROOM_ENTRANCE;
+                tiles[col][row].type = TILE_ROOM_ENTRANCE;
             }
             else {
-                tiles[col][row] = TILE_FLOOR;
+                tiles[col][row].type = TILE_FLOOR;
             }
         }
 
@@ -98,7 +98,7 @@ void generate_rooms(MapData* map_data) {
 		for (int col = rm->x; col < (rm->x + rm->cols); col++) {
 			for (int row = rm->y; row < (rm->y + rm->rows); row++) {
                 //if (map_data->tiles[col][row] != TILE_ROOM_ENTRANCE)
-				map_data->tiles[col][row] = TILE_FLOOR;
+				map_data->tiles[col][row].type = TILE_FLOOR;
 			}
 		}
 	}
@@ -147,7 +147,7 @@ MapData generate_map(MapGenerationConfig config) {
     // init
     for (int col = 0; col < MAX_COLS; col++) {
         for (int row = 0; row < MAX_ROWS; row++) {
-            ret.tiles[col][row] = TILE_WALL;
+            ret.tiles[col][row].type = TILE_WALL;
         }
     }
     // printf("LOL\n");

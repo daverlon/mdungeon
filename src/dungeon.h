@@ -9,6 +9,11 @@ enum TileType {
     // TILE_CORRIDOR_MEETING_POINT
 };
 
+typedef struct {
+    enum TileType type;
+    bool found;
+} TileData;
+
 // typedef struct {
 //     enum TileType type;
 
@@ -86,8 +91,11 @@ typedef struct {
     int rows;
     // enum TileType** tileenum TileType (*tiles)[rows];s;
     // enum TileType (*tiles)[MAX_ROWS];
-    enum TileType tiles[MAX_COLS][MAX_ROWS];
-    Vector2 corridor_entrance_points[32];
+
+    //enum TileType tiles[MAX_COLS][MAX_ROWS];
+    TileData tiles[MAX_COLS][MAX_ROWS];
+
+    //Vector2 corridor_entrance_points[32];
     // enum TileType (*tiles)[MAX_ROWS];
     Room rooms[MAX_ROOMS];
 

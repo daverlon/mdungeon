@@ -13,7 +13,7 @@ bool isValid(Point point, int cols, int rows) {
 }
 
 bool isUnblocked(MapData* map, Point point) {
-    return (map->tiles[point.x][point.y] != TILE_WALL);
+    return (map->tiles[point.x][point.y].type != TILE_WALL);
 }
 
 bool isDestination(Point current, Point dest) {
