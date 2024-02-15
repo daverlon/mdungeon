@@ -1562,8 +1562,6 @@ int main(void/*int argc, char* argv[]*/) {
         //cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
         //printf("Cur room: %i\n", zor->cur_room);
 
-        bool entity_is_fading = false;
-
 		// check for ents who are dead
         for (int i = 0; i < entity_data.entity_counter; ) {
             Entity* ent = &entity_data.entities[i];
@@ -1574,17 +1572,14 @@ int main(void/*int argc, char* argv[]*/) {
             if (ent->hp <= 0) {
                 drop_random_item(ent, &item_data);
                 increment_entity_fade(ent);
-                entity_is_fading = true;
                 if (ent->faded) {
                     remove_entity(i, &entity_data);
                 }
                 else {
                     i++;
                 }
-                // Don't increment i, as we want to check the new entity that's now at index i
             }
             else {
-                // Only increment i if no entity was removed
                 i++;
             }
         }
@@ -1605,7 +1600,7 @@ int main(void/*int argc, char* argv[]*/) {
 
 
         // process entities who are in sync moving
-		if (sync_moving_entity_exists(&entity_data) && !entity_is_fading) {
+		if (sync_moving_entity_exists(&entity_data)) {
 
 			for (int i = 0; i < entity_data.entity_counter; i++) {
 				Entity* ent = &entity_data.entities[i];
@@ -1615,7 +1610,6 @@ int main(void/*int argc, char* argv[]*/) {
 
                 if (is_entity_dead(ent))
                     ent->state = IDLE;
-
 
 				if (entity_finished_turn(ent)) {
 					// when an in sync entity has finished their turn
@@ -1687,7 +1681,6 @@ int main(void/*int argc, char* argv[]*/) {
 
         // ================================================================== //
 
-        
         for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
             if (is_entity_dead(ent)) continue;
@@ -1697,7 +1690,6 @@ int main(void/*int argc, char* argv[]*/) {
 
 			scan_items_for_pickup(&item_data, ent);
         }
-
 
         Vector2 cam_target = { 0 };
         if (zor->state == ATTACK_MELEE) {
