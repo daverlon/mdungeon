@@ -1838,6 +1838,9 @@ int main(void/*int argc, char* argv[]*/) {
         EndDrawing();
     }
 
+    UnloadRenderTexture(dungeon_texture);
+    UnloadRenderTexture(fog_texture);
+
     // delete item textures
     {
         UnloadTexture(texture_item_spilledcup);
