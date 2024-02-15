@@ -115,6 +115,8 @@ int get_room_id_at_position(int x, int y, MapData* map_data) {
     return -1;
 }
 
+#define PADDING 10
+
 // /*void*/enum TileType** generate_map(MapGenerationConfig config) {
 MapData generate_map(MapGenerationConfig config) {
 
@@ -131,11 +133,11 @@ MapData generate_map(MapGenerationConfig config) {
     const int sector_rows = config.sector_rows;
     const int sector_cols = config.sector_cols;
 
-    ret.cols = sector_cols * n_sectors_x;
+    ret.cols = sector_cols * n_sectors_x + 2 * PADDING;
     if (ret.cols > MAX_COLS) {
         printf("Error: Map cols (%i) exceeds MAX_COLS (%i)\n", ret.cols, MAX_COLS);
     }
-    ret.rows = sector_rows * n_sectors_y;
+    ret.rows = sector_rows * n_sectors_y + 2 * PADDING;
     if (ret.rows > MAX_ROWS) {
         printf("Error: Map rows (%i) exceeds MAX_ROWS (%i)\n", ret.cols, MAX_ROWS);
     }
@@ -208,6 +210,10 @@ MapData generate_map(MapGenerationConfig config) {
                 }
             }
         }
+    }
+    for (int i = 0; i < ret.n_sectors; i++) {
+        ret.rooms[i].x += PADDING;
+        ret.rooms[i].y += PADDING;
     }
 
     printf("N SECTORS: %i\n", ret.n_sectors);

@@ -31,6 +31,23 @@ enum ItemType {
     ITEM_APPLE
 };
 
+typedef struct {
+    enum ItemType type;
+    Vector2 position; // grid coordinate position
+    // for player to ignore item once dropped
+    // enemies should still be able to pickup the item (perhaps some won't want to though)
+    //bool prevent_pickup;  // default 0: (0=can pickup) (moved to entity)
+    int hp;
+} Item;
+// ideas:   BasicItem (items with consistent effects)
+//          SpecialItem (items that may change? this seems weird..)
+//          ItemWear (wear value for each item (such that they are disposable? probably not fun)) 
+
+typedef struct {
+    Item items[MAX_INSTANCES];
+    int item_counter;
+} ItemData;
+
 //
 // level which the game should be running
 // all dungeons/levels should be present here
@@ -78,39 +95,37 @@ enum Direction {
     DOWNLEFT
 };
 
-
 typedef struct {
     enum EntityType ent_type;
     Vector2 position; // grid coordinate position
     Texture2D texture;
+
     Animation animation;
     enum EntityState state;
-    //bool attack_animation_playing;
-    enum EntityState next_state;
     enum Direction direction;
-    //bool should_move;
-    //Vector2 target_position;
-    enum ItemType inventory[32];
-    enum ItemType equipped_item;
+    float lunge_progress;
+    int cur_move_anim_extra_frame;
+
+    Item inventory[32];
     int inventory_size;
     int inventory_item_count;
-    //bool prevent_pickup;// temporary prevention to pickup dropped items
+    int equipped_item_index;
     bool can_pickup; // whether they can actaully pickup items in general
+
     Vector2 original_position;
-    float lunge_progress;
     bool can_swap_positions;
-    int health;
-    int max_health;
+
     int n_turn;
     int max_turns; // max turns per 'turn'
     bool sync_move;
-    //bool rethink_move;
-    //bool finished_turn;
-    int cur_move_anim_extra_frame;
+
     bool attack_damage_given; // when the attack damage is complete
-    //int attack_damage;
     int cur_room;
-    bool found_target; // for entity
+    bool found_target; // for ai
+
+    int atk; // base damage
+    int max_hp; // max hp 
+    int hp; // cur hp
 } Entity;
 
 #define MOVE_ANIMATION_EXTRA_FRAMES 3

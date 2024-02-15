@@ -16,6 +16,8 @@
 
 #include "pathfinding.h"
 
+#include "entity_defs.h"
+
 void print_vector2(Vector2 vec) {
     printf("Vector2: (%.8f, %.8f)\n", vec.x, vec.y);
 }
@@ -28,13 +30,7 @@ void print_vector2(Vector2 vec) {
 #define LIGHTYELLOW (Color){100, 100, 50, 100}
 
 const int world_width = 32 * 14;
-
-#define LOAD_ZOR_TEXTURE() (LoadTexture("res/zor/zor_spritesheet.png"))
-#define LOAD_FANTANO_TEXTURE() (LoadTexture("res/fantano/fantano_idle.png"))
-#define LOAD_CYHAR_TEXTURE() (LoadTexture("res/cyhar/cyhar_idle.png"))
-
 // mobs
-#define LOAD_FLY_TEXTURE() (LoadTexture("res/entities/fly.png"))
 
 #define LOAD_SPILLEDCUP_TEXTURE() (LoadTexture("res/items/item_spilledcup.png"))
 #define LOAD_STICK_TEXTURE() (LoadTexture("res/items/item_stick.png"))
@@ -79,39 +75,6 @@ void print_turn_queue(int turn_queue[], int queue_size) {
     }
     printf("]\n");
 }
-
-// turn queue (queue size should be limited to max entities per turn)
-typedef struct {
-    Entity entity;
-
-} Turn;
-
-typedef struct {
-    enum ItemType type;
-    Vector2 position; // grid coordinate position
-    // for player to ignore item once dropped
-    // enemies should still be able to pickup the item (perhaps some won't want to though)
-    //bool prevent_pickup;  // default 0: (0=can pickup) (moved to entity)
-} Item;
-// ideas:   BasicItem (items with consistent effects)
-//          SpecialItem (items that may change? this seems weird..)
-//          ItemWear (wear value for each item (such that they are disposable? probably not fun)) 
-
-typedef struct {
-    Item items[MAX_INSTANCES];
-    int item_counter;
-} ItemData;
-
-//enum DungeonTextureLayer {
-//    LAYER_FLOOR,
-//    //LAYER_TERRAIN, // terrain layer will be rendered onto floor layer anyway?
-//    LAYER_FLOOR_ABOVE_MODELS
-//};
-//
-//typedef struct {
-//    RenderTexture textures[2]; // layers above
-//} DungeonTexture;
-//#define DUNGEON_TEXTURE_LAYERS 2
 
 Vector2 direction_to_vector2(enum Direction direction) {
     switch (direction) {
@@ -193,7 +156,6 @@ void set_entity_position(Entity* ent, Vector2 pos) {
     ent->original_position = pos;
 }
 
-
 Vector2 get_tile_infront_entity(Entity* ent) {
     return Vector2Add(ent->original_position, direction_to_vector2(ent->direction));
 }
@@ -235,7 +197,8 @@ void drop_item(const int index, Entity* entity, ItemData* item_data) {
             return;
         }
     }
-    item_data->items[item_data->item_counter] = (Item){ entity->inventory[index], entity->position };
+    item_data->items[item_data->item_counter] = entity->inventory[index];
+    item_data->items[item_data->item_counter].position = entity->original_position;
     item_data->item_counter++;
     delete_item_from_entity_inventory(index, entity);
     //entity->prevent_pickup = true;
@@ -259,7 +222,7 @@ void drop_random_item(Entity* entity, ItemData* item_data) {
     }
 
     int index = GetRandomValue(0, entity->inventory_item_count-1);
-    item_data->items[item_data->item_counter] = (Item){ entity->inventory[index], entity->position };
+    item_data->items[item_data->item_counter] = entity->inventory[index];
     item_data->item_counter++;
     delete_item_from_entity_inventory(index, entity);
     //entity->prevent_pickup = true;
@@ -619,7 +582,7 @@ void render_entity(Entity* ent) {
 	int hp_bar_y = grid_position.y + SPRITE_SIZE / 1.2;
     int hp_bar_height = 10;
     int hp_bar_width = TILE_SIZE;
-    int hp_cur_width = ((float)ent->health / (float)ent->max_health) * (float)hp_bar_width;
+    int hp_cur_width = ((float)ent->hp / (float)ent->max_hp) * (float)hp_bar_width;
     DrawRectangle(hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height, BLACK);
     DrawRectangle(hp_bar_x, hp_bar_y, hp_cur_width, hp_bar_height, GREEN);
 }
@@ -768,7 +731,7 @@ Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* it
         if (item_exists_on_tile(col, row, item_data))
             continue;
 
-        if (entity_exists_on_tile(col, row, entity_data, NULL, NULL, true))
+        if (any_entity_exists_on_tile(col, row, entity_data, NULL, NULL, NULL))
             continue;
 
         // todo:
@@ -789,6 +752,9 @@ void create_item_instance(Item item, ItemData* item_data) {
         printf("Error: Tried to create ITEM_NOTHING.\n");
         return;
     }
+
+    int hp = 100;
+
     item_data->items[item_data->item_counter] = item;
     item_data->item_counter++;
     printf("Created item. Counter: %i\n", item_data->item_counter);
@@ -836,7 +802,8 @@ void spawn_items(enum ItemType item_type, ItemData* item_data, const MapData* ma
         if (position_taken) continue;
         printf("Creating spilledcup at %i, %i\n", col, row);
         // found valid tile
-        create_item_instance((Item) { item_type, (Vector2) { col, row } }, item_data);
+        int hp = 100;
+        create_item_instance((Item) { item_type, (Vector2) { col, row }, hp }, item_data);
         item_counter++;
     }
 }
@@ -848,6 +815,12 @@ void nullify_all_items(ItemData* item_data) {
     item_data->item_counter = 0;
     printf("Set every item to ITEM_NOTHING\n");
 }
+
+//void calculate_stats_at_level(EntityStats *stats) {
+//    // Calculate HP and ATK based on base stats and growth rates
+//    *hp =  + (level - 1) * HP_PER_LEVEL;
+//    *atk = BASE_ATK + (level - 1) * 3;
+//}
 
 // all items should probably not be on 1 texture.
 // only certain items can appear at a time
@@ -862,7 +835,7 @@ void pickup_item(const int index, ItemData* item_data, Entity* entity) {
     // todo:
     // check for out of bounds index (should never occur with good code)
     if (entity->inventory_item_count < entity->inventory_size) {
-        entity->inventory[entity->inventory_item_count] = item_data->items[index].type;
+        entity->inventory[entity->inventory_item_count] = item_data->items[index];
         entity->inventory_item_count++;
 		delete_item(index, item_data);
     }
@@ -870,13 +843,14 @@ void pickup_item(const int index, ItemData* item_data, Entity* entity) {
 }
 
 void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
+    if (!entity->can_pickup) return;
     //if (!entity->prevent_pickup) {
         // entity can pickup item
         for (int i = 0; i < item_data->item_counter; i++) {
             Item* item = &item_data->items[i];
             // item exists on same tile as entity
             if (
-                (entity->state == MOVE &&Vector2Equals(item->position, get_tile_infront_entity(entity))
+                (entity->state == MOVE && Vector2Equals(item->position, get_tile_infront_entity(entity))
              && (!Vector2Equals(item->position, entity->original_position))
 			)) {
                 pickup_item(i, item_data, entity);
@@ -886,6 +860,87 @@ void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
     //}
 }
 
+void get_item_name(enum ItemType it, char* buf) {
+    switch (it) {
+    default:
+        sprintf_s(buf, 9, "empty"); 
+        break;
+    case ITEM_APPLE:
+        sprintf_s(buf, 6, "apple"); 
+        break;
+    case ITEM_STICK:
+        sprintf_s(buf, 6, "stick"); 
+        break;
+    case ITEM_SPILLEDCUP:
+        sprintf_s(buf, 12, "spilled cup");
+        break;
+    }
+}
+
+void render_ui(int window_width, int window_height, Entity* player, Font* fonts) {
+
+
+    int y = 30;
+
+    //y += 25;
+
+    // hp bar
+    {
+        int w = 300;
+        /*int h = (float)window_height * 0.0166666667;*/
+        int h = 12;
+        //int x = window_width / 2 - w / 2;
+        int x = window_width - w - 30;
+
+        Rectangle hp_bar = (Rectangle){ x, y, w, h };
+        int hp_hp = ((float)player->hp / (float)player->max_hp) * hp_bar.width;
+
+        //DrawRectangleGradientV(x, y, w, h, RED, (Color){64, 0, 0, 255});
+        DrawRectangleGradientV(x, y, w, h, (Color) { 64, 0, 0, 255 }, RED);
+        DrawRectangleGradientV(x, y, hp_hp, h, GREEN, DARKGREEN);
+        DrawRectangleRoundedLines(hp_bar, 0.5f, 1.0f, 2, BLACK);
+
+        char txt[10];
+        sprintf_s(txt, 10, "%i/%i", player->hp, player->max_hp);
+
+        int yy = y - 1;
+        int xx = x + 2;
+        DrawTextEx(fonts[0], txt, (Vector2) { xx +2, yy +2 }, 24.0f, 1.0f, Fade(BLACK, 0.7f));
+        DrawTextEx(fonts[0], txt, (Vector2) { xx, yy }, 24.0f, 1.0f, WHITE);
+    }
+
+    y += 25;
+
+    // item hp bar
+    {
+        int w = 210;
+        int h = 12;
+        int x = window_width - w - 30;
+
+        int item_i = player->equipped_item_index;
+        Item* equipped_item = &player->inventory[item_i];
+
+        Rectangle hp_bar = (Rectangle){ x, y, w, h };
+        int hp_hp = ((float)equipped_item->hp / (float)player->max_hp) * hp_bar.width;
+
+		//DrawRectangleGradientV(x, y, w, h, GRAY, (Color){30, 30, 30, 255});
+		DrawRectangleGradientV(x, y, w, h, (Color) { 30, 30, 30, 255 }, GRAY);
+		DrawRectangleGradientV(x, y, hp_hp, h, BLUE, (Color) { 0, 0, 202, 255 });
+		DrawRectangleRoundedLines(hp_bar, 0.5f, 1.0f, 2, BLACK);
+
+		char txt[16];
+        get_item_name(player->inventory[item_i].type, txt);
+
+        Vector2 fs = MeasureTextEx(fonts[0], txt, 24.0f, 1.0f);
+        //x = window_width - 30 - fs.x - 3;
+
+        DrawTextEx(fonts[0], txt, (Vector2) { x + 4, y + 2}, 24.0f, 1.0f, Fade(BLACK, 0.7f));
+        DrawTextEx(fonts[0], txt, (Vector2) { x+2, y }, 24.0f, 1.0f, WHITE);
+
+    }
+
+}
+
 void render_player_inventory(Entity* player) {
     // for debug/development purposes
     const int c = player->inventory_item_count;
@@ -893,7 +948,7 @@ void render_player_inventory(Entity* player) {
     const int gap = 30;
     DrawText("Inventory", 10, text_y_offset - gap, 24, WHITE);
     for (int i = 0; i < c; i++) {
-        switch (player->inventory[i]) {
+        switch (player->inventory[i].type) {
         default: {
             printf("Default\n");
             break;
@@ -950,7 +1005,6 @@ void remove_entity(const int index, EntityData* entity_data) {
 
     printf("Deleted entity index %i, %i instances left on map.\n", index, entity_data->entity_counter);
 }
-
 
 void generate_enchanted_groves_dungeon_texture(MapData* map_data, RenderTexture2D* dungeon_texture/*DungeonTexture* dungeon_texture*/) {
 
@@ -1196,26 +1250,44 @@ bool sync_moving_entity_exists(EntityData* entity_data) {
     return false;
 }
 
-int melee_attack_damage(Entity* ent) {
-	int damage = 3;
+int value_variation(int value, int percentage) {
+    int v = GetRandomValue(-percentage, percentage);
+    float vf = 1.0 + (v / 100.0);
 
-	switch (ent->equipped_item) {
+    float fval = (float)value;
+    fval *= vf;
+    return (int)fval;
+}
+
+int get_melee_attack_damage(Entity* ent, int *self_damage) {
+    int damage = ent->atk;
+
+    // todo: ui etc for equipped item
+    if (ent->inventory_item_count <= 0) return;
+
+	//switch (ent->equipped_item) {
+    switch (ent->inventory[ent->equipped_item_index].type) {
 	case ITEM_NOTHING: {
 		break;
 	}
 	case ITEM_STICK: {
-		damage = 7;
+		damage *= 2;
+        *self_damage = 50;
 		break;
 	}
 	default:
 		break;
 	}
+    
+    damage = value_variation(damage, 5);
+    //printf("Damage: %2.5f\n", fdamage);
 
     return damage;
 }
 
 void apply_damage(Entity* to, Entity* from, int amount, bool change_direction) {
-    to->health -= amount;
+    printf("Damage: %i\n", amount);
+    to->hp -= amount;
     
     // spin the damaged entity around to look at the other ent
 
@@ -1241,11 +1313,14 @@ void process_attack(Entity* ent, EntityData* entity_data) {
         
         Vector2 tile = get_tile_infront_entity(ent);
 
-        int damage = melee_attack_damage(ent);
         int id = 0;
         if (any_entity_exists_on_tile(tile.x, tile.y, entity_data, NULL, &id)) {
             if (!ent->attack_damage_given) {
                 if (ent->animation.cur_frame > 7) {
+                    int self_damage = 0;
+					int damage = get_melee_attack_damage(ent, &self_damage);
+                    printf("Self damage %i\n", self_damage);
+                    ent->inventory[ent->equipped_item_index].hp -= self_damage;
                     apply_damage(&entity_data->entities[id], ent, damage, true);
 				}
             }
@@ -1256,6 +1331,9 @@ void process_attack(Entity* ent, EntityData* entity_data) {
         //printf("Error: invalid attack state given.\n");
         break;
     }
+    }
+    if (ent->inventory[ent->equipped_item_index].hp <= 0) {
+        delete_item_from_entity_inventory(ent->equipped_item_index, ent);
     }
 }
 
@@ -1295,9 +1373,13 @@ int main(void/*int argc, char* argv[]*/) {
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     //SetWindowState(FLAG_WINDOW_MAXIMIZED);
     //SetTargetFPS(30);
-    SetTargetFPS(240);
+    SetTargetFPS(144);
 
-    SetRandomSeed(123);
+    SetRandomSeed(99);
+
+    Font fonts[1];
+    fonts[0] = LoadFontEx("res/fonts/YanoneKaffeesatz-Regular.ttf", 144, NULL, NULL);
+    SetTextureFilter(fonts[0].texture, TEXTURE_FILTER_POINT);
 
     Camera2D camera = { 0 };
     {
@@ -1359,46 +1441,20 @@ int main(void/*int argc, char* argv[]*/) {
             if (!gsi.init) {
 
                 cur_turn_entity_index = 0;
-                map_data = generate_map(DUNGEON_PRESET_ADVANCED);
+                map_data = generate_map(DUNGEON_PRESET_BASIC);
                 generate_enchanted_groves_dungeon_texture(&map_data, &dungeon_texture);
 
 				// init the entities
-				create_entity_instance(&entity_data, (Entity) {
-					.ent_type = ENT_ZOR,
-						.texture = LOAD_ZOR_TEXTURE(),
-						.animation = (Animation){ .n_frames = 20 },
-						.health = 30,
-						.max_health = 30,
-						.max_turns = 2,
-                        .inventory_size = 3
-				});
+                create_entity_instance(&entity_data, default_ent_zor());
 				zor = GET_LAST_ENTITY_REF();
 
-                /*create_entity_instance(&entity_data, (Entity) {
-                    .ent_type = ENT_ZOR,
-                        .texture = LOAD_ZOR_TEXTURE(),
-                        .animation = (Animation){ .n_frames = 20 },
-                        .health = 25,
-                        .max_health = 25,
-                        .max_turns = 1
-                });*/
-
                 //int ents = GetRandomValue(4, 7);
-                int ents = 5;
+                int ents = 4;
                 for (int i = 0; i < ents; i++)
-					create_entity_instance(&entity_data, (Entity) {
-						.ent_type = ENT_FLY,
-							.texture = LOAD_FLY_TEXTURE(),
-							.animation = (Animation){ .n_frames = 10 },
-							.health = 10,
-							.max_health = 10,
-							.can_swap_positions = false,
-							.max_turns = 1,
-							.inventory_size = 2
-					});
-                //ents = GetRandomValue(2, 4);
+                    create_entity_instance(&entity_data, create_fly_entity());
+                        
+				nullify_all_items(&item_data);
 
-                nullify_all_items(&item_data);
                 spawn_items(ITEM_STICK, &item_data, &map_data, 5, 8);
                 spawn_items(ITEM_APPLE, &item_data, &map_data, 4, 7);
                 spawn_items(ITEM_SPILLEDCUP, &item_data, &map_data, 2, 4);
@@ -1495,7 +1551,7 @@ int main(void/*int argc, char* argv[]*/) {
             Vector2 act = get_active_position(ent);
             ent->cur_room = get_room_id_at_position(act.x, act.y, &map_data);
 
-            if (ent->health <= 0) {
+            if (ent->hp <= 0) {
                 if (i == 0) { // player die
                     //continue;
                 }
@@ -1514,7 +1570,7 @@ int main(void/*int argc, char* argv[]*/) {
 
         // debug statements
         //printf("\nEntity turn id: %i\n", cur_turn_entity_index);
-        /*for (int i = 0; i < entity_data.entity_counter; i++) {
+        /*for (int i =24 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
             printf("Entity %i state %i async %i ||| turn %i/%i ||| maxframe %.5f\n", i, ent->state, (int)ent->sync_move, ent->n_turn, ent->max_turns, ent->animation.max_frame_time);
         }*/
@@ -1837,6 +1893,7 @@ int main(void/*int argc, char* argv[]*/) {
 
 			DrawFPS(10, 5);
 			render_player_inventory(zor);
+            render_ui(window_width, window_height, zor, fonts);
 
 		} // end rendering
         EndDrawing();
@@ -1857,6 +1914,8 @@ int main(void/*int argc, char* argv[]*/) {
             UnloadTexture(entity_data.entities[i].texture);
         }
     }
+
+    UnloadFont(fonts[0]);
 
     CloseWindow();
     return 0;
