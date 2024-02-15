@@ -87,6 +87,7 @@ typedef struct {
 } Animation;
 
 enum EntityType {
+    ENT_NOTHING,
     ENT_ZOR,
     ENT_FANTANO,
     ENT_CYHAR,
@@ -133,6 +134,7 @@ typedef struct {
     bool attack_damage_given; // when the attack damage is complete
     int cur_room;
     bool found_target; // for ai
+    bool under_attack; // ^^
 
     int atk; // base damage
     int max_hp; // max hp 

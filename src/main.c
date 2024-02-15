@@ -271,7 +271,7 @@ bool entity_exists_on_tile(int col, int row, Entity* ent) {
     Vector2 pos = (Vector2){ col, row };
     Vector2 ent_target_position = get_tile_infront_entity(ent);
     if (
-      (ent->state == MOVE && Vector2Equals(ent_target_position, pos))
+      (ent->state == MOVE && Vector2Equals(ent_target_position, pos) && Vector2Equals(ent->position, pos))
     || (ent->state != MOVE && Vector2Equals(ent->original_position, pos))
     ) {
         return true;
@@ -429,7 +429,7 @@ void control_entity(Entity* ent, const enum TileType tiles[MAX_COLS][MAX_ROWS], 
 
         // entity block/swap
         int swapi = -1;
-        if (entity_exists_on_tile(i_targ_x, i_targ_y, entity_data, ent, &swapi, false)) {
+        if (any_entity_exists_on_tile(i_targ_x, i_targ_y, entity_data, ent, &swapi, NULL)) {
             //printf("Tried to walk on tile with entity\n");
             if (swapi != -1)
 				if (!entity_data->entities[swapi].can_swap_positions) {
@@ -1003,7 +1003,15 @@ void remove_entity(const int index, EntityData* entity_data) {
     // Decrement the counter since one entity has been removed
     entity_data->entity_counter--;
 
-    printf("Deleted entity index %i, %i instances left on map.\n", index, entity_data->entity_counter);
+    printf("Deleted entity index %i, %i instances left on map.\n", index, entity_data->entity_counter-1);
+}
+
+void nullify_all_entities(EntityData* entity_data) {
+    for (int i = 0; i < entity_data->entity_counter; i++) {
+        UnloadTexture(entity_data->entities[i].texture);
+        entity_data->entities[i].ent_type = ENT_NOTHING;
+    }
+    entity_data->entity_counter = 0;
 }
 
 void generate_enchanted_groves_dungeon_texture(MapData* map_data, RenderTexture2D* dungeon_texture/*DungeonTexture* dungeon_texture*/) {
@@ -1172,11 +1180,11 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         if (is_entity_visible(ent, target, map_data)) {
             if (!ent->found_target) {
                 ent->found_target = true;
-                printf("Found target\n");
+                //printf("Found target\n");
             }
         }
     }
-
+    // still no target found
     if (!ent->found_target) {
         ent->state = SKIP_TURN;
         return;
@@ -1250,13 +1258,13 @@ bool sync_moving_entity_exists(EntityData* entity_data) {
     return false;
 }
 
-int value_variation(int value, int percentage) {
+int value_variation(float value, int percentage) {
     int v = GetRandomValue(-percentage, percentage);
     float vf = 1.0 + (v / 100.0);
 
-    float fval = (float)value;
+    float fval = roundf(value);
     fval *= vf;
-    return (int)fval;
+    return (int)roundf(value);
 }
 
 int get_melee_attack_damage(Entity* ent, int *self_damage) {
@@ -1267,6 +1275,8 @@ int get_melee_attack_damage(Entity* ent, int *self_damage) {
 
     switch (ent->inventory[ent->equipped_item_index].type) {
     case ITEM_NOTHING: {
+        if (GetRandomValue(0, 9))
+            damage *= 1.7f;
         break;
     }
     case ITEM_APPLE: {
@@ -1280,7 +1290,11 @@ int get_melee_attack_damage(Entity* ent, int *self_damage) {
         break;
     }
 	case ITEM_STICK: {
+        // crit
 		damage *= 2.5f;
+        if (GetRandomValue(0, 2) == 0)
+            damage *= 1.7f;
+
         *self_damage = 50;
 		break;
 	}
@@ -1308,10 +1322,11 @@ void apply_damage(Entity* to, Entity* from, int amount, bool change_direction) {
         1.0f, 1.0f
     });
 
-    if (change_direction && to->state == IDLE && !Vector2Equals(direction, (Vector2){0.0f, 0.0f}))
-		to->direction = vector_to_direction(direction);
+    /*if (change_direction && to->state == IDLE && !Vector2Equals(direction, (Vector2){0.0f, 0.0f}))
+		to->direction = vector_to_direction(direction);*/
 
     from->attack_damage_given = true;
+    to->found_target = true;
 }
 
 void process_attack(Entity* ent, EntityData* entity_data) {
@@ -1454,18 +1469,15 @@ int main(void/*int argc, char* argv[]*/) {
                 generate_enchanted_groves_dungeon_texture(&map_data, &dungeon_texture);
 
 				// init the entities
+                nullify_all_entities(&entity_data);
                 create_entity_instance(&entity_data, default_ent_zor());
 				zor = GET_LAST_ENTITY_REF();
-                zor->max_turns = 2;
-
-                //int ents = GetRandomValue(4, 7);
-                int ents = 4;
-                for (int i = 0; i < ents; i++)
+                for (int i = 0; i < 5; i++)
                     create_entity_instance(&entity_data, create_fly_entity());
                         
+                // init items
 				nullify_all_items(&item_data);
-
-                spawn_items_on_random_tiles((Item){ITEM_STICK, ITEMCAT_WEAPON}, & item_data, & map_data, 5, 8);
+                spawn_items_on_random_tiles((Item) { ITEM_STICK, ITEMCAT_WEAPON}, & item_data, & map_data, 5, 8);
                 spawn_items_on_random_tiles((Item) { ITEM_APPLE, ITEMCAT_CONSUMABLE }, &item_data, &map_data, 4, 7);
                 spawn_items_on_random_tiles((Item) { ITEM_SPILLEDCUP, ITEMCAT_CONSUMABLE }, &item_data, &map_data, 2, 4);
 
@@ -1496,6 +1508,8 @@ int main(void/*int argc, char* argv[]*/) {
         //cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
         //printf("Cur room: %i\n", zor->cur_room);
 
+        //bool player_is_dead = false;
+
 		// check for ents who are dead
         for (int i = 0; i < entity_data.entity_counter; ) {
             Entity* ent = &entity_data.entities[i];
@@ -1506,6 +1520,7 @@ int main(void/*int argc, char* argv[]*/) {
 
             if (ent->hp <= 0) {
                 if (i == 0) { // player die
+                    //player_is_dead = true;
                     //continue;
                 }
                     
@@ -1518,6 +1533,10 @@ int main(void/*int argc, char* argv[]*/) {
                 i++;
             }
         }
+       /* if (player_is_dead) {
+            set_gamestate(&gsi, GS_INTRO_DUNGEON);
+            continue;
+        }*/
 
         // ================================================================== //
 
@@ -1527,7 +1546,6 @@ int main(void/*int argc, char* argv[]*/) {
             Entity* ent = &entity_data.entities[i];
             printf("Entity %i state %i async %i ||| turn %i/%i ||| maxframe %.5f\n", i, ent->state, (int)ent->sync_move, ent->n_turn, ent->max_turns, ent->animation.max_frame_time);
         }*/
-
 
         // process entities who are in sync moving
         if (sync_moving_entity_exists(&entity_data)) {
@@ -1660,6 +1678,11 @@ int main(void/*int argc, char* argv[]*/) {
                 }
                 printf("\n");
             }
+        }
+
+        if (zor->hp <= 0) {
+            set_gamestate(&gsi, GS_INTRO_DUNGEON);
+            continue;
         }
 
 
