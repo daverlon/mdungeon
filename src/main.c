@@ -1524,7 +1524,9 @@ int main(void/*int argc, char* argv[]*/) {
                 nullify_all_entities(&entity_data);
                 create_entity_instance(&entity_data, default_ent_zor());
 				zor = GET_LAST_ENTITY_REF();
-                for (int i = 0; i < 5; i++)
+                zor->max_turns = 1;
+                zor->atk = 20;
+                for (int i = 0; i < 8; i++)
                     create_entity_instance(&entity_data, create_fly_entity());
                         
                 // init items
@@ -1610,6 +1612,10 @@ int main(void/*int argc, char* argv[]*/) {
 
 				if (!ent->sync_move)
 					continue;
+
+                if (is_entity_dead(ent))
+                    ent->state = IDLE;
+
 
 				if (entity_finished_turn(ent)) {
 					// when an in sync entity has finished their turn
