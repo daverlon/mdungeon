@@ -1108,9 +1108,11 @@ PathList find_path_between_entities(MapData* map_data, bool cut_corners, Vector2
     return path_list;
 }
 
-bool is_entity_visible(Entity* from, Entity* to, MapData* map_data) {
+bool is_entity_visible(Entity* from, Entity* to, MapData* map_data, bool look_into_corridors) {
     //printf("from %i - to %i\n", from->cur_room, to->cur_room);
 
+    // check if target is moving into the same room
+    // dont think it does anything?
     if (to->state == MOVE) {
         int moving_to_i = get_room_id_at_position(
             get_tile_infront_entity(to).x,
@@ -1118,6 +1120,17 @@ bool is_entity_visible(Entity* from, Entity* to, MapData* map_data) {
             map_data);
         if (moving_to_i != -1 && moving_to_i == from->cur_room) {
             return true;
+        }
+    }
+
+    if (look_into_corridors) {
+        if (to->cur_room == -1) {
+            if (from->cur_room != -1) {
+                float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
+                //printf("Distance: %2.5f\n", distance);
+                if (distance <= map_data->view_distance)
+                    return true;
+            }
         }
     }
 
@@ -1177,7 +1190,7 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
 
     // calculate next move state
     if (!ent->found_target) {
-        if (is_entity_visible(ent, target, map_data)) {
+        if (is_entity_visible(ent, target, map_data, false)) {
             if (!ent->found_target) {
                 ent->found_target = true;
                 //printf("Found target\n");
@@ -1840,7 +1853,7 @@ int main(void/*int argc, char* argv[]*/) {
 						Entity* ent = &entity_data.entities[e];
 
                         if (e != 0) {
-                            if (!is_entity_visible(zor, ent, &map_data)) continue;
+                            if (!is_entity_visible(zor, ent, &map_data, false)) continue;
                         }
 
 						//Vector2 text_pos = position_to_grid_position(ent->position);

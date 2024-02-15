@@ -84,8 +84,8 @@ Entity create_fly_entity() {
 		.found_target = false,
 
 		.atk = 9,
-		.max_hp = 15,
-		.hp = 15
+		.max_hp = 11,
+		.hp = 11
 	};
 	return ent;
 }
