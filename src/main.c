@@ -566,26 +566,43 @@ void render_entity(Entity* ent) {
 
 	// DrawRectangleLines(
     //  gridPosition.x, gridPosition.y, SPRITE_SIZE, SPRITE_SIZE, BLACK);
-    DrawTextureRec(
-        ent->texture,
-        (Rectangle) {
-        ent->animation.cur_frame* SPRITE_SIZE,
-            ent->animation.y_offset + (ent->direction * SPRITE_SIZE),
-            SPRITE_SIZE,
-            SPRITE_SIZE
-    },
-        grid_position,
-            WHITE
-            );
+    if (ent->fade_timer > 0.0f) {
+        DrawTextureRec(
+            ent->texture,
+            (Rectangle) {
+            ent->animation.cur_frame* SPRITE_SIZE,
+                ent->animation.y_offset + (ent->direction * SPRITE_SIZE),
+                SPRITE_SIZE,
+                SPRITE_SIZE
+        },
+            grid_position,
+                Fade(WHITE, 1.0f - (ent->fade_timer / FADE_DURATION))
+                );
+    }
+    else {
+		DrawTextureRec(
+			ent->texture,
+			(Rectangle) {
+			ent->animation.cur_frame* SPRITE_SIZE,
+				ent->animation.y_offset + (ent->direction * SPRITE_SIZE),
+				SPRITE_SIZE,
+				SPRITE_SIZE
+		},
+			grid_position,
+				WHITE
+				);
 
-	// hp bar width
-    int hp_bar_x = grid_position.x + TILE_SIZE / 1.3 + 2;
-	int hp_bar_y = grid_position.y + SPRITE_SIZE / 1.2;
-    int hp_bar_height = 10;
-    int hp_bar_width = TILE_SIZE;
-    int hp_cur_width = ((float)ent->hp / (float)ent->max_hp) * (float)hp_bar_width;
-    DrawRectangle(hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height, BLACK);
-    DrawRectangle(hp_bar_x, hp_bar_y, hp_cur_width, hp_bar_height, GREEN);
+
+		// hp bar width
+		int hp_bar_x = grid_position.x + TILE_SIZE / 1.3 + 2;
+		int hp_bar_y = grid_position.y + SPRITE_SIZE / 1.2;
+		int hp_bar_height = 10;
+		int hp_bar_width = TILE_SIZE;
+		int hp_cur_width = ((float)ent->hp / (float)ent->max_hp) * (float)hp_bar_width;
+		DrawRectangle(hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height, BLACK);
+		DrawRectangle(hp_bar_x, hp_bar_y, hp_cur_width, hp_bar_height, GREEN);
+
+    }
 }
 
 void lunge_entity(Entity* ent) {
@@ -1014,6 +1031,19 @@ void nullify_all_entities(EntityData* entity_data) {
     entity_data->entity_counter = 0;
 }
 
+void increment_entity_fade(Entity* ent) {
+    ent->fade_timer += GetFrameTime();
+
+	if (ent->fade_timer >= FADE_DURATION) {
+        ent->faded = true;
+        //ent->opacity = 0.0f;  // Ensure opacity is set to 0 when fading completes
+	}
+	else {
+		// Linear interpolation of opacity based on fading progress
+        //ent->opacity = 1.0f - (ent->fade_timer / FADE_DURATION);
+	}
+}
+
 void generate_enchanted_groves_dungeon_texture(MapData* map_data, RenderTexture2D* dungeon_texture/*DungeonTexture* dungeon_texture*/) {
 
     map_data->view_distance = 10.0f;
@@ -1259,8 +1289,17 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
     }
 }
 
+bool is_entity_dead(Entity* ent) {
+    return (ent->hp <= 0);
+}
+
 bool entity_finished_turn(Entity* ent) {
-    return (ent->state == IDLE && ent->n_turn >= ent->max_turns);
+    if (is_entity_dead(ent)) {
+        return ent->faded;
+    }
+    else {
+        return (ent->state == IDLE && ent->n_turn >= ent->max_turns);
+    }
 }
 
 bool sync_moving_entity_exists(EntityData* entity_data) {
@@ -1521,24 +1560,25 @@ int main(void/*int argc, char* argv[]*/) {
         //cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
         //printf("Cur room: %i\n", zor->cur_room);
 
-        //bool player_is_dead = false;
+        bool entity_is_fading = false;
 
 		// check for ents who are dead
         for (int i = 0; i < entity_data.entity_counter; ) {
             Entity* ent = &entity_data.entities[i];
-
             
             Vector2 act = get_active_position(ent);
             ent->cur_room = get_room_id_at_position(act.x, act.y, &map_data);
 
             if (ent->hp <= 0) {
-                if (i == 0) { // player die
-                    //player_is_dead = true;
-                    //continue;
-                }
-                    
                 drop_random_item(ent, &item_data);
-                remove_entity(i, &entity_data);
+                increment_entity_fade(ent);
+                entity_is_fading = true;
+                if (ent->faded) {
+                    remove_entity(i, &entity_data);
+                }
+                else {
+                    i++;
+                }
                 // Don't increment i, as we want to check the new entity that's now at index i
             }
             else {
@@ -1546,6 +1586,7 @@ int main(void/*int argc, char* argv[]*/) {
                 i++;
             }
         }
+
        /* if (player_is_dead) {
             set_gamestate(&gsi, GS_INTRO_DUNGEON);
             continue;
@@ -1560,84 +1601,90 @@ int main(void/*int argc, char* argv[]*/) {
             printf("Entity %i state %i async %i ||| turn %i/%i ||| maxframe %.5f\n", i, ent->state, (int)ent->sync_move, ent->n_turn, ent->max_turns, ent->animation.max_frame_time);
         }*/
 
+
         // process entities who are in sync moving
-        if (sync_moving_entity_exists(&entity_data)) {
+		if (sync_moving_entity_exists(&entity_data) && !entity_is_fading) {
 
-            for (int i = 0; i < entity_data.entity_counter; i++) {
-                Entity* ent = &entity_data.entities[i];
+			for (int i = 0; i < entity_data.entity_counter; i++) {
+				Entity* ent = &entity_data.entities[i];
 
-                if (!ent->sync_move)
-                    continue;
-                
-                if (entity_finished_turn(ent)) {
-                    // when an in sync entity has finished their turn
-                    cur_turn_entity_index++;
-                    ent->n_turn = 0;
-                    if (cur_turn_entity_index >= entity_data.entity_counter) {
-                        cur_turn_entity_index = 0;
-                    }
-                    ent->sync_move = false;
-                }
-                else {
-                    // if not, rethink turn and process it
-                    if (ent->state == IDLE || ent->state == SKIP_TURN) {
-                        entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
-                    }
-                    process_entity_state(ent, &entity_data);
-                }
-            }
-        }
-        else {
-            // no sync moving entities exist currently
+				if (!ent->sync_move)
+					continue;
 
-            Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
+				if (entity_finished_turn(ent)) {
+					// when an in sync entity has finished their turn
+					cur_turn_entity_index++;
+					ent->n_turn = 0;
+					if (cur_turn_entity_index >= entity_data.entity_counter) {
+						cur_turn_entity_index = 0;
+					}
+					ent->sync_move = false;
+				}
+				else {
+					// if not, rethink turn and process it
+					if (ent->state == IDLE || ent->state == SKIP_TURN) {
+						entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
+					}
+					process_entity_state(ent, &entity_data);
+				}
+			}
+		}
+		else {
+			// no sync moving entities exist currently
 
-            entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
+			Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
 
-            // check if sync entities should exist for this turn
-            // and log them
-            if (this_ent->state == MOVE) {
-                for (int i = cur_turn_entity_index + 1; i < entity_data.entity_counter; i++) {
-                    Entity* ent = &entity_data.entities[i];
-                    entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
-                    if (ent->state != MOVE && ent->state != SKIP_TURN) {
-                        reset_entity_state(ent, false);
-                        break;
-                    }
-                    this_ent->sync_move = true;
-                    ent->sync_move = true;
-                }
-            }
+			entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
+
+			// check if sync entities should exist for this turn
+			// and log them
+			if (this_ent->state == MOVE) {
+				for (int i = cur_turn_entity_index + 1; i < entity_data.entity_counter; i++) {
+					Entity* ent = &entity_data.entities[i];
+
+					entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
+					if (ent->state != MOVE && ent->state != SKIP_TURN) {
+						reset_entity_state(ent, false);
+						break;
+					}
+					this_ent->sync_move = true;
+					ent->sync_move = true;
+				}
+			}
 
 
-            // if there are none, process individual entity as normal
-            if (!sync_moving_entity_exists(&entity_data)) {
+			// if there are none, process individual entity as normal
+			if (!sync_moving_entity_exists(&entity_data)) {
 
-                Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
+				Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
 
-                entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
+				entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
 
-                process_entity_state(this_ent, &entity_data);
+                if (is_entity_dead(this_ent))
+                    this_ent->state = IDLE;
 
-                // entity finished turn?
-                if (entity_finished_turn(this_ent)) {
-                    cur_turn_entity_index++;
-                    this_ent->n_turn = 0;
-                    if (cur_turn_entity_index >= entity_data.entity_counter) {
-                        cur_turn_entity_index = 0;
-                    }
-                }
-            }
-            else {
+				process_entity_state(this_ent, &entity_data);
 
-            }
-        }
+				// entity finished turn?
+				if (entity_finished_turn(this_ent)) {
+					cur_turn_entity_index++;
+					this_ent->n_turn = 0;
+					if (cur_turn_entity_index >= entity_data.entity_counter) {
+						cur_turn_entity_index = 0;
+					}
+				}
+			}
+			else {
+
+			}
+		}
 
         // ================================================================== //
 
         
         for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
+            if (is_entity_dead(ent)) continue;
 
 			update_animation_state(ent);
             update_animation(&ent->animation);
