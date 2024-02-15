@@ -53,7 +53,7 @@ const int world_width = 32 * 14;
 // #define NPC_MAX_INVENTORY_SIZE 4
 
 #define FOG_AMOUNT 0.3f
-#define VIEW_DISTANCE 5.0f
+//#define VIEW_DISTANCE 5.0f
 
 void rotate_smooth(enum Direction target, enum Direction* dir) {
     int diff = (target - *dir + 8) % 8; // Calculate the shortest difference in direction
@@ -269,7 +269,8 @@ Vector2 get_active_position(Entity* ent) {
     switch (ent->state) {
     case MOVE:
         //return ent->position;
-        return get_tile_infront_entity(ent);
+        //return get_tile_infront_entity(ent);
+        return ent->position;
         break;
     /*case ATTACK_MELEE:
         return ent->original_position;*/
@@ -951,7 +952,10 @@ void remove_entity(const int index, EntityData* entity_data) {
 }
 
 
-void generate_enchanted_groves_dungeon_texture(const MapData* map_data, RenderTexture2D* dungeon_texture/*DungeonTexture* dungeon_texture*/) {
+void generate_enchanted_groves_dungeon_texture(MapData* map_data, RenderTexture2D* dungeon_texture/*DungeonTexture* dungeon_texture*/) {
+
+    map_data->view_distance = 10.0f;
+
     Texture2D floor_texture = LOAD_FOREST_GRASS_TILES_TEXTURE();
     Texture2D terrain_texture = LOAD_FOREST_TERRAIN_TEXTURE();
     Texture2D active_floor_texture = LOAD_FOREST_ACTIVE_GRASS();
@@ -1078,7 +1082,7 @@ bool is_entity_visible(Entity* from, Entity* to, MapData* map_data) {
 		//float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
 		float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
 		//printf("Distance: %2.5f\n", distance);
-        if (distance > VIEW_DISTANCE) 
+        if (distance > map_data->view_distance) 
             return false;
     }
     return true;
@@ -1099,7 +1103,7 @@ bool is_item_visible(Entity* from, Item* item, MapData* map_data) {
         //float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
         float distance = Vector2DistanceSqr(get_active_position(from), item->position);
         //printf("Distance: %2.5f\n", distance);
-        if (distance > VIEW_DISTANCE)
+        if (distance > map_data->view_distance)
             return false;
     }
     return true;
@@ -1287,11 +1291,11 @@ int main(void/*int argc, char* argv[]*/) {
     int window_height = 720;
 
     InitWindow(window_width, window_height, "mDungeon");
-    SetWindowState(FLAG_VSYNC_HINT);
+    //SetWindowState(FLAG_VSYNC_HINT);
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     //SetWindowState(FLAG_WINDOW_MAXIMIZED);
     //SetTargetFPS(30);
-    SetTargetFPS(144);
+    SetTargetFPS(240);
 
     SetRandomSeed(123);
 
@@ -1355,7 +1359,7 @@ int main(void/*int argc, char* argv[]*/) {
             if (!gsi.init) {
 
                 cur_turn_entity_index = 0;
-                map_data = generate_map(DUNGEON_PRESET_BASIC);
+                map_data = generate_map(DUNGEON_PRESET_ADVANCED);
                 generate_enchanted_groves_dungeon_texture(&map_data, &dungeon_texture);
 
 				// init the entities
@@ -1780,9 +1784,9 @@ int main(void/*int argc, char* argv[]*/) {
                     pos.y -= TILE_SIZE / 4;
                     Vector2 screen_pos = GetWorldToScreen2D(pos, camera);
 
-                    Vector2 size = (Vector2){TILE_SIZE * 2.5, 0.0f};
-                    size.x *= camera.zoom;
-                    DrawCircle(screen_pos.x, screen_pos.y, size.x, Fade(BLACK, FOG_AMOUNT));
+                    float circle_radius = TILE_SIZE * pow(map_data.view_distance, 0.5f) * camera.zoom;
+
+                    DrawCircle(screen_pos.x, screen_pos.y, circle_radius, Fade(BLACK, FOG_AMOUNT));
                 }
 
                 EndBlendMode();
