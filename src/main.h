@@ -18,6 +18,8 @@
 #define DEFAULT_FRAME_COUNT 20
 
 #define FADE_DURATION 0.5f
+#define HURT_DURATION 1.0f
+#define ATTACK_DELAY_DURATION 0.1f
 
 enum EntityState {
     IDLE,
@@ -143,10 +145,15 @@ typedef struct {
     int hp; // cur hp
 
     // death animation
-    //bool is_fading;
     bool faded;
     float fade_timer;
-    //float opacity;
+
+    // hurt animation
+    bool hurt;
+    float hurt_timer;
+
+    // attack timing
+    float attack_delay;
 } Entity;
 
 #define MOVE_ANIMATION_EXTRA_FRAMES 3
