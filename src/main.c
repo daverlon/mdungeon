@@ -537,7 +537,7 @@ Vector2 position_to_grid_position(Vector2 pos) {
     return gridPos;
 }
 
-void render_entity(Entity* ent, Font* fonts) {
+void render_entity(Entity* ent, Font* fonts, EntityData* entity_data) {
     Vector2 grid_position = position_to_grid_position(ent->position);
     Vector2 grid_original_position = position_to_grid_position(ent->original_position);
     Vector2 grid_infront_position = position_to_grid_position(get_tile_infront_entity(ent));
@@ -599,11 +599,15 @@ void render_entity(Entity* ent, Font* fonts) {
     {
         // grid position
         // to position
-        Vector2 start = (Vector2){ grid_original_position.x + TILE_SIZE + TILE_SIZE /4, grid_original_position.y + TILE_SIZE};
-        Vector2 end = (Vector2){ start.x, start.y - 50};
-        for (int i = 0; i < 2; i++) {
-            float timer = ent->damage_notif_timer[i];
-            int amt = ent->damage_notif_amount[i];
+        for (int i = 0; i < MAX_DAMAGE_POPUPS; i++) {
+            float timer = entity_data->damage_popups[i].notif_timer;
+            int amt = entity_data->damage_popups[i].amount;
+
+            Vector2 start = entity_data->damage_popups[i].position;
+            start = position_to_grid_position(start);
+            start = (Vector2){ start.x + TILE_SIZE + TILE_SIZE / 4,
+                               start.y + TILE_SIZE };
+			Vector2 end = (Vector2){ start.x, start.y - 50};
 
             if (timer <= 0.0f) continue;
 
@@ -935,7 +939,7 @@ void render_ui(int window_width, int window_height, Entity* player, Font* fonts,
         char turn_txt[10];
         sprintf_s(turn_txt, 10, "Turn %i", cur_turn);
 
-        int xx = window_width / 2 - MeasureTextEx(fonts[0], turn_txt, 24.0f, 1.0f).x / 2.0f;
+        int xx = window_width / 2.0f - MeasureTextEx(fonts[0], turn_txt, 24.0f, 1.0f).x / 2.0f;
         int yy = 30;
 
         DrawTextEx(fonts[0], turn_txt, (Vector2) { xx + 2, yy + 2 }, 24.0f, 1.0f, Fade(BLACK, 0.7f));
@@ -1164,16 +1168,6 @@ void generate_enchanted_groves_dungeon_texture(MapData* map_data, RenderTexture2
     UnloadTexture(terrain_texture);
 }
 
-//PathList find_path_between_entities(MapData* map_data, bool cut_corners, Entity* start_entity, Entity* target_entity) {
-//    PathList path_list = { .path = { 0 }, .length = 0 };
-//    //if (target_entity->state != IDLE) return path_list;
-//    Point start_point = { (int)start_entity->original_position.x, (int)start_entity->original_position.y };
-//    //Point target_point = { (int)target_entity->position.x, (int)target_entity->position.y };
-//    Point target_point = { (int)target_entity->original_position.x, (int)target_entity->original_position.y };
-//    aStarSearch(map_data, start_point, target_point, &path_list, cut_corners);
-//    return path_list;
-//}
-
 PathList find_path_between_entities(MapData* map_data, bool cut_corners, Vector2 start_pos, Vector2 end_pos) {
     PathList path_list = { .path = { 0 }, .length = 0 };
     Point start_point = { (int)roundf(start_pos.x), (int)roundf(start_pos.y) };
@@ -1334,10 +1328,10 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
     }
 }
 
-void decrement_entity_notif_timer(Entity* ent) {
-    for (int i = 0; i < 2; i++) {
-        if (ent->damage_notif_timer[i] >= 0.0f) {
-            ent->damage_notif_timer[i] -= GetFrameTime();
+void decrement_entity_notif_timer(EntityData* entity_data) {
+    for (int i = 0; i < MAX_DAMAGE_POPUPS; i++) {
+        if (entity_data->damage_popups[i].notif_timer >= 0.0f) {
+            entity_data->damage_popups[i].notif_timer -= GetFrameTime();
         }
     }
 }
@@ -1413,7 +1407,7 @@ int get_melee_attack_damage(Entity* ent, int *self_damage) {
     return damage;
 }
 
-void apply_damage(Entity* to, Entity* from, int amount, bool change_direction) {
+void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, EntityData* entity_data) {
     printf("Damage: %i\n", amount);
     to->hp -= amount;
     
@@ -1434,13 +1428,15 @@ void apply_damage(Entity* to, Entity* from, int amount, bool change_direction) {
     to->found_target = true; // for ai
 
     // shouldnt need more than 2 holders for damage popup
-    if (to->damage_notif_timer[0] <= 0.0f) {
-        to->damage_notif_timer[0] = DAMAGE_NOTIF_DURATION;
-		to->damage_notif_amount[0] = amount;
+    if (entity_data->damage_popups[0].notif_timer <= 0.0f) {
+        entity_data->damage_popups[0].notif_timer = DAMAGE_NOTIF_DURATION;
+        entity_data->damage_popups[0].amount = amount;
+        entity_data->damage_popups[0].position = to->original_position;
     }
     else {
-        to->damage_notif_timer[1] = DAMAGE_NOTIF_DURATION;
-		to->damage_notif_amount[1] = amount;
+        entity_data->damage_popups[1].notif_timer = DAMAGE_NOTIF_DURATION;
+        entity_data->damage_popups[1].amount = amount;
+        entity_data->damage_popups[1].position = to->original_position;
     }
 }
 
@@ -1460,7 +1456,7 @@ void process_attack(Entity* ent, EntityData* entity_data) {
 					int damage = get_melee_attack_damage(ent, &self_damage);
                     printf("Damage: %i ||| Self Damage: %i\n", damage, self_damage);
                     ent->inventory[ent->equipped_item_index].hp -= self_damage;
-                    apply_damage(&entity_data->entities[id], ent, damage, true);
+                    apply_damage(&entity_data->entities[id], ent, damage, true, entity_data);
 				}
             }
         }
@@ -1660,22 +1656,14 @@ int main(void/*int argc, char* argv[]*/) {
 
                 increment_entity_fade(ent);
 
-				bool damage_notif = false;
-				/*for (int i = 0; i < 2; i++) {
-					if (ent->damage_notif_timer[i] > 0.0f) 
-                        damage_notif = true;
-				}*/
-
-                if (ent->faded && !damage_notif) {
+                if (ent->faded) {
                     remove_entity(i, &entity_data);
                 }
                 else {
-                    decrement_entity_notif_timer(ent);
 			        i++;
                 }
             }
             else {
-				decrement_entity_notif_timer(ent);
 				// ent alive
 				i++;
             }
@@ -1784,10 +1772,10 @@ int main(void/*int argc, char* argv[]*/) {
 			update_animation_state(ent);
             update_animation(&ent->animation);
 
-            //decrement_entity_notif_timer(ent);
 
 			scan_items_for_pickup(&item_data, ent);
         }
+
 
         Vector2 cam_target = { 0 };
 
@@ -1842,6 +1830,8 @@ int main(void/*int argc, char* argv[]*/) {
             continue;
         }
 
+
+		decrement_entity_notif_timer(&entity_data);
 
 		// do rendering
 		BeginDrawing();
@@ -2015,7 +2005,7 @@ int main(void/*int argc, char* argv[]*/) {
 					}
 
 					if (index_to_render != -1) {
-						render_entity(&entity_data.entities[index_to_render], fonts);
+						render_entity(&entity_data.entities[index_to_render], fonts, &entity_data);
 						rendered[index_to_render] = true;
 					}
 				}

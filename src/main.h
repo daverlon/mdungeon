@@ -153,8 +153,8 @@ typedef struct {
 
     // hurt animation
     //bool hurt;
-    float damage_notif_timer[2];
-    int damage_notif_amount[2]; // may overlap with 2 attacks
+    //float damage_notif_timer[2];
+    //int damage_notif_amount[2]; // may overlap with 2 attacks
 
     // attack timing
     float attack_delay;
@@ -162,7 +162,19 @@ typedef struct {
 
 #define MOVE_ANIMATION_EXTRA_FRAMES 3
 
+#define MAX_DAMAGE_POPUPS 2
+
+typedef struct {
+    float notif_timer;
+    int amount;
+    Vector2 position;
+} DamagePopup;
+
 typedef struct {
     Entity entities[MAX_INSTANCES];
     int entity_counter;
+
+
+    // shouldnt be anymore than 2 at once
+    DamagePopup damage_popups[MAX_DAMAGE_POPUPS];
 } EntityData;
