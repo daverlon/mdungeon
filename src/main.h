@@ -80,9 +80,6 @@ enum GameState {
 typedef struct {
     enum GameState game_state;
     bool init;
-
-    /*int turn_queue[MAX_INSTANCES];
-    int queue_size;*/
 } GameStateInfo;
 
 typedef struct {
@@ -150,11 +147,6 @@ typedef struct {
     // death animation
     bool faded;
     float fade_timer;
-
-    // hurt animation
-    //bool hurt;
-    //float damage_notif_timer[2];
-    //int damage_notif_amount[2]; // may overlap with 2 attacks
 
     // attack timing
     float attack_delay;
