@@ -164,10 +164,11 @@ bool entity_reached_destination(Entity* ent) {
     return Vector2Equals(ent->position, ent->original_position);
 }
 
-bool item_exists_on_tile(int col, int row, const ItemData* item_data) {
+bool item_exists_on_tile(int col, int row, const ItemData* item_data, int* index) {
     Vector2 pos = (Vector2){ col, row };
     for (int i = 0; i < item_data->item_counter; i++) {
         if (Vector2Equals(item_data->items[i].position, pos)) {
+            if (index != NULL) *index = i;
             return true;
         }
     }
@@ -204,6 +205,87 @@ void drop_item(const int index, Entity* entity, ItemData* item_data) {
     //entity->prevent_pickup = true;
 }
 
+void create_item_instance(Item item, ItemData* item_data) {
+    //printf("Lol: %i\n", *counter);
+    if (item_data->item_counter >= MAX_INSTANCES) {
+        printf("Cannot spawn item. Maximum items reached.\n");
+        return;
+    }
+    if (item.type == ITEM_NOTHING) {
+        printf("Error: Tried to create ITEM_NOTHING.\n");
+        return;
+    }
+
+    item_data->items[item_data->item_counter] = item;
+    item_data->item_counter++;
+    printf("Created item. Counter: %i\n", item_data->item_counter);
+}
+
+void delete_item(const int index, ItemData* item_data) {
+    if (index >= item_data->item_counter) {
+        printf("Warning: Tried to delete item index: %i, instance counter: %i\n", index, item_data->item_counter);
+        return;
+    }
+
+    for (int i = index; i < item_data->item_counter; i++) {
+        item_data->items[i] = item_data->items[i + 1];
+    }
+    item_data->item_counter--;
+    printf("Deleted item index: %i, %i instances left on map.\n", index, item_data->item_counter);
+}
+
+void spawn_items_on_random_tiles(Item item, ItemData* item_data, const MapData* map_data, int min, int max) {
+    if (item_data->item_counter >= MAX_INSTANCES || item_data->item_counter + max >= MAX_INSTANCES) {
+        printf("Error: [Spawn Items] mapItemCounter already at maximum instances.\n");
+        return;
+    }
+
+    int n_items = GetRandomValue(min, max);
+    int item_counter = 0;
+    while (item_counter < n_items) {
+        //for (int i = 0; i < n_spilledcups; i++) {
+        int col = GetRandomValue(0, MAX_COLS);
+        int row = GetRandomValue(0, MAX_ROWS);
+
+        // check adjacent tiles for corridor (may cause blocking)
+        if (map_data->tiles[col + 1][row].type == TILE_CORRIDOR) continue; // right
+        if (map_data->tiles[col][row+1].type == TILE_CORRIDOR) continue; // down
+        if (map_data->tiles[col-1][row].type == TILE_CORRIDOR) continue; // left
+        if (map_data->tiles[col][row-1].type == TILE_CORRIDOR) continue; // up
+
+        if (map_data->tiles[col][row].type != TILE_FLOOR)
+            continue;
+        // tile is floor
+        bool position_taken = false;
+        for (int i = 0; i < n_items; i++) {
+            if (Vector2Equals(
+                item_data->items[i].position,
+                (Vector2) {
+                col, row
+            })) {
+                position_taken = true;
+                break;
+            }
+        }
+        if (position_taken) continue;
+        printf("Creating spilledcup at %i, %i\n", col, row);
+        // found valid tile
+        item.position = (Vector2){ col, row };
+        item.hp = 100;
+        create_item_instance(item, item_data);
+        item_counter++;
+    }
+}
+
+void nullify_all_items(ItemData* item_data) {
+    for (int i = 0; i < MAX_INSTANCES; i++) {
+        item_data->items[i] = (Item){ ITEM_NOTHING, ITEMCAT_NOTHING, (Vector2) { 0, 0 } };
+    }
+    item_data->item_counter = 0;
+    printf("Set every item to ITEM_NOTHING\n");
+}
+
+
 void drop_random_item(Entity* entity, ItemData* item_data) {
 
     if (!(entity->inventory_item_count > 0)) return;
@@ -226,6 +308,19 @@ void drop_random_item(Entity* entity, ItemData* item_data) {
     item_data->item_counter++;
     delete_item_from_entity_inventory(index, entity);
     //entity->prevent_pickup = true;
+}
+
+void pickup_item(const int index, ItemData* item_data, Entity* entity) {
+    // add item to entity inventory
+    // this should be called with delete_item called after
+    // todo:
+    // check for out of bounds index (should never occur with good code)
+    if (entity->inventory_item_count < entity->inventory_size) {
+        entity->inventory[entity->inventory_item_count] = item_data->items[index];
+        entity->inventory_item_count++;
+		delete_item(index, item_data);
+    }
+    // else: "inventory full"?
 }
 
 Vector2 get_active_position(Entity* ent) {
@@ -336,9 +431,29 @@ void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, Ite
     // if no key is held, ensure that isMoving is set to false
     if (ent->state != IDLE) return;
 
-	if (IsKeyPressed(KEY_E) && ent->inventory_item_count > 0) {
-		drop_item(ent->inventory_item_count - 1, ent, item_data);
-	}
+    if (IsKeyPressed(KEY_E)) {
+        // check ground
+        int buf = -1;
+        if (item_exists_on_tile(ent->original_position.x, ent->original_position.y, item_data, &buf)) {
+            // pickup
+            if (!ent->prevent_pickup) {
+                pickup_item(buf, item_data, ent);
+                ent->prevent_drop = true;
+                reset_entity_state(ent, true);
+                return;
+            }
+        }
+        else {
+            if (!ent->prevent_drop) {
+                if (ent->inventory_item_count > 0) {
+                    drop_item(ent->inventory_item_count - 1, ent, item_data);
+                    ent->prevent_pickup = true;
+                    reset_entity_state(ent, true);
+                    return;
+                }
+            }
+		}
+    }
 
     bool should_move = false;
 
@@ -607,7 +722,7 @@ void render_entity(Entity* ent, Font* fonts, EntityData* entity_data) {
             start = position_to_grid_position(start);
             start = (Vector2){ start.x + TILE_SIZE + TILE_SIZE / 4,
                                start.y + TILE_SIZE };
-			Vector2 end = (Vector2){ start.x, start.y - 50};
+            Vector2 end = (Vector2){ start.x, start.y - 50 };
 
             if (timer <= 0.0f) continue;
 
@@ -615,11 +730,17 @@ void render_entity(Entity* ent, Font* fonts, EntityData* entity_data) {
 
             //printf("Prog: %2.5f\n", progress);
 
-			Vector2 pos = Vector2Lerp(start, end, progress);
+            Vector2 pos = Vector2Lerp(start, end, progress);
 
             float font_size = 20.0f;
+            Color clr = ORANGE;
+            if (entity_data->damage_popups[i].crit) {
+                clr = RED;
+                font_size += 4.0f;
+            }
+
             DrawTextEx(fonts[0], TextFormat("-%d", amt), (Vector2) { pos.x + 1, pos.y + 1 }, font_size, 1.0f, Fade(BLACK, 1.0f - progress));
-            DrawTextEx(fonts[0], TextFormat("-%d", amt), (Vector2) { pos.x, pos.y }, font_size, 1.0f, Fade(ORANGE, 1.0f - progress));
+            DrawTextEx(fonts[0], TextFormat("-%d", amt), (Vector2) { pos.x, pos.y }, font_size, 1.0f, Fade(clr, 1.0f - progress));
         }
     }
 
@@ -778,7 +899,7 @@ Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* it
             continue;
 
         // check if item exists on tile
-        if (item_exists_on_tile(col, row, item_data))
+        if (item_exists_on_tile(col, row, item_data, NULL))
             continue;
 
         if (any_entity_exists_on_tile(col, row, entity_data, NULL, NULL))
@@ -790,86 +911,6 @@ Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* it
         break;
     }
     return (Vector2) { col, row };
-}
-
-void create_item_instance(Item item, ItemData* item_data) {
-    //printf("Lol: %i\n", *counter);
-    if (item_data->item_counter >= MAX_INSTANCES) {
-        printf("Cannot spawn item. Maximum items reached.\n");
-        return;
-    }
-    if (item.type == ITEM_NOTHING) {
-        printf("Error: Tried to create ITEM_NOTHING.\n");
-        return;
-    }
-
-    item_data->items[item_data->item_counter] = item;
-    item_data->item_counter++;
-    printf("Created item. Counter: %i\n", item_data->item_counter);
-}
-
-void delete_item(const int index, ItemData* item_data) {
-    if (index >= item_data->item_counter) {
-        printf("Warning: Tried to delete item index: %i, instance counter: %i\n", index, item_data->item_counter);
-        return;
-    }
-
-    for (int i = index; i < item_data->item_counter; i++) {
-        item_data->items[i] = item_data->items[i + 1];
-    }
-    item_data->item_counter--;
-    printf("Deleted item index: %i, %i instances left on map.\n", index, item_data->item_counter);
-}
-
-void spawn_items_on_random_tiles(Item item, ItemData* item_data, const MapData* map_data, int min, int max) {
-    if (item_data->item_counter >= MAX_INSTANCES || item_data->item_counter + max >= MAX_INSTANCES) {
-        printf("Error: [Spawn Items] mapItemCounter already at maximum instances.\n");
-        return;
-    }
-
-    int n_items = GetRandomValue(min, max);
-    int item_counter = 0;
-    while (item_counter < n_items) {
-        //for (int i = 0; i < n_spilledcups; i++) {
-        int col = GetRandomValue(0, MAX_COLS);
-        int row = GetRandomValue(0, MAX_ROWS);
-
-        // check adjacent tiles for corridor (may cause blocking)
-        if (map_data->tiles[col + 1][row].type == TILE_CORRIDOR) continue; // right
-        if (map_data->tiles[col][row+1].type == TILE_CORRIDOR) continue; // down
-        if (map_data->tiles[col-1][row].type == TILE_CORRIDOR) continue; // left
-        if (map_data->tiles[col][row-1].type == TILE_CORRIDOR) continue; // up
-
-        if (map_data->tiles[col][row].type != TILE_FLOOR)
-            continue;
-        // tile is floor
-        bool position_taken = false;
-        for (int i = 0; i < n_items; i++) {
-            if (Vector2Equals(
-                item_data->items[i].position,
-                (Vector2) {
-                col, row
-            })) {
-                position_taken = true;
-                break;
-            }
-        }
-        if (position_taken) continue;
-        printf("Creating spilledcup at %i, %i\n", col, row);
-        // found valid tile
-        item.position = (Vector2){ col, row };
-        item.hp = 100;
-        create_item_instance(item, item_data);
-        item_counter++;
-    }
-}
-
-void nullify_all_items(ItemData* item_data) {
-    for (int i = 0; i < MAX_INSTANCES; i++) {
-        item_data->items[i] = (Item){ ITEM_NOTHING, ITEMCAT_NOTHING, (Vector2) { 0, 0 } };
-    }
-    item_data->item_counter = 0;
-    printf("Set every item to ITEM_NOTHING\n");
 }
 
 //void calculate_stats_at_level(EntityStats *stats) {
@@ -884,19 +925,6 @@ void nullify_all_items(ItemData* item_data) {
 // void render_items_on_map(int* counter, Item* items, Texture2D tx) {
     // requires textures 
 // }
-
-void pickup_item(const int index, ItemData* item_data, Entity* entity) {
-    // add item to entity inventory
-    // this should be called with delete_item called after
-    // todo:
-    // check for out of bounds index (should never occur with good code)
-    if (entity->inventory_item_count < entity->inventory_size) {
-        entity->inventory[entity->inventory_item_count] = item_data->items[index];
-        entity->inventory_item_count++;
-		delete_item(index, item_data);
-    }
-    // else: "inventory full"?
-}
 
 void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
     if (!entity->can_pickup) return;
@@ -1366,7 +1394,7 @@ int value_variation(float value, int percentage) {
     return (int)roundf(value);
 }
 
-int get_melee_attack_damage(Entity* ent, int *self_damage) {
+int get_melee_attack_damage(Entity* ent, int *self_damage, bool *crit) {
     float damage = (float)ent->atk;
 
     // todo: ui etc for equipped item
@@ -1374,8 +1402,10 @@ int get_melee_attack_damage(Entity* ent, int *self_damage) {
 
     switch (ent->inventory[ent->equipped_item_index].type) {
     case ITEM_NOTHING: {
-        if (GetRandomValue(0, 9))
+        if (GetRandomValue(0, 9)) {
             damage *= 1.7f;
+            *crit = true;
+        }
         break;
     }
     case ITEM_APPLE: {
@@ -1391,8 +1421,10 @@ int get_melee_attack_damage(Entity* ent, int *self_damage) {
 	case ITEM_STICK: {
         // crit
 		damage *= 2.5f;
-        if (GetRandomValue(0, 2) == 0)
+        if (GetRandomValue(0, 2) == 0) {
             damage *= 1.7f;
+            *crit = true;
+        }
 
         *self_damage = GetRandomValue(45, 50);
 		break;
@@ -1407,7 +1439,7 @@ int get_melee_attack_damage(Entity* ent, int *self_damage) {
     return damage;
 }
 
-void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, EntityData* entity_data) {
+void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, bool crit, EntityData* entity_data) {
     printf("Damage: %i\n", amount);
     to->hp -= amount;
     
@@ -1436,6 +1468,7 @@ void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, E
         entity_data->damage_popups[i].notif_timer = DAMAGE_NOTIF_DURATION;
         entity_data->damage_popups[i].amount = amount;
         entity_data->damage_popups[i].position = to->original_position;
+        entity_data->damage_popups[i].crit = crit;
         break;
     }
 }
@@ -1453,10 +1486,15 @@ void process_attack(Entity* ent, EntityData* entity_data) {
             if (!ent->attack_damage_given) {
                 if (ent->animation.cur_frame > 7) {
                     int self_damage = 0;
-					int damage = get_melee_attack_damage(ent, &self_damage);
-                    printf("Damage: %i ||| Self Damage: %i\n", damage, self_damage);
+
+                    bool crit = false;
+
+					int damage = get_melee_attack_damage(ent, &self_damage, &crit);
+                    //printf("Damage: %i ||| Self Damage: %i\n", damage, self_damage);
+
+                    apply_damage(&entity_data->entities[id], ent, damage, true, crit, entity_data);
+
                     ent->inventory[ent->equipped_item_index].hp -= self_damage;
-                    apply_damage(&entity_data->entities[id], ent, damage, true, entity_data);
 				}
             }
         }
@@ -1500,7 +1538,7 @@ void process_entity_state(Entity* ent, EntityData* entity_data) {
 			lunge_entity(ent, 1.0f, 2.5f);
 			break;
         case ENT_ZOR:
-            lunge_entity(ent, 1.2f, 2.9f);
+			lunge_entity(ent, 1.2f, 2.9f);
 			break;
         case ENT_FLY:
             lunge_entity(ent, 1.4f, 3.0f);
@@ -1704,6 +1742,9 @@ int main(void/*int argc, char* argv[]*/) {
                         cur_turn++;
                     }
                     ent->sync_move = false;
+
+                    ent->prevent_pickup = false;
+                    ent->prevent_drop = false;
                 }
                 else {
                     // if not, rethink turn and process it
@@ -1757,6 +1798,8 @@ int main(void/*int argc, char* argv[]*/) {
                         cur_turn_entity_index = 0;
                         cur_turn++;
                     }
+                    this_ent->prevent_pickup = false;
+                    this_ent->prevent_drop = false;
                 }
             }
             else {
@@ -1775,7 +1818,7 @@ int main(void/*int argc, char* argv[]*/) {
             update_animation(&ent->animation);
 
 
-			scan_items_for_pickup(&item_data, ent);
+			//scan_items_for_pickup(&item_data, ent);
         }
 
 

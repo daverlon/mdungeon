@@ -127,6 +127,8 @@ typedef struct {
     int inventory_item_count;
     int equipped_item_index;
     bool can_pickup; // whether they can actaully pickup items in general
+    bool prevent_pickup; // temporary state
+    bool prevent_drop; // temporary state
 
     Vector2 original_position;
     bool can_swap_positions;
@@ -150,6 +152,7 @@ typedef struct {
 
     // attack timing
     float attack_delay;
+    bool crit;
 } Entity;
 
 #define MOVE_ANIMATION_EXTRA_FRAMES 3
@@ -160,6 +163,7 @@ typedef struct {
     float notif_timer;
     int amount;
     Vector2 position;
+    bool crit;
 } DamagePopup;
 
 typedef struct {
