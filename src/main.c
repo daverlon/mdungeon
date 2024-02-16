@@ -151,9 +151,10 @@ enum Direction vector_to_direction(Vector2 vector) {
     }
 }
 
-void set_entity_position(Entity* ent, Vector2 pos) {
+void set_entity_position(Entity* ent, Vector2 pos, MapData* map_data) {
     ent->position = pos;
     ent->original_position = pos;
+    map_data->tiles[(int)pos.x][(int)pos.y].reserved = true;
 }
 
 Vector2 get_tile_infront_entity(Entity* ent) {
@@ -249,9 +250,9 @@ void spawn_items_on_random_tiles(Item item, ItemData* item_data, const MapData* 
 
         // check adjacent tiles for corridor (may cause blocking)
         if (map_data->tiles[col + 1][row].type == TILE_CORRIDOR) continue; // right
-        if (map_data->tiles[col][row+1].type == TILE_CORRIDOR) continue; // down
-        if (map_data->tiles[col-1][row].type == TILE_CORRIDOR) continue; // left
-        if (map_data->tiles[col][row-1].type == TILE_CORRIDOR) continue; // up
+        if (map_data->tiles[col][row + 1].type == TILE_CORRIDOR) continue; // down
+        if (map_data->tiles[col - 1][row].type == TILE_CORRIDOR) continue; // left
+        if (map_data->tiles[col][row - 1].type == TILE_CORRIDOR) continue; // up
 
         if (map_data->tiles[col][row].type != TILE_FLOOR)
             continue;
@@ -303,7 +304,7 @@ void drop_random_item(Entity* entity, ItemData* item_data) {
         }
     }
 
-    int index = GetRandomValue(0, entity->inventory_item_count-1);
+    int index = GetRandomValue(0, entity->inventory_item_count - 1);
     item_data->items[item_data->item_counter] = entity->inventory[index];
     item_data->item_counter++;
     delete_item_from_entity_inventory(index, entity);
@@ -318,7 +319,7 @@ void pickup_item(const int index, ItemData* item_data, Entity* entity) {
     if (entity->inventory_item_count < entity->inventory_size) {
         entity->inventory[entity->inventory_item_count] = item_data->items[index];
         entity->inventory_item_count++;
-		delete_item(index, item_data);
+        delete_item(index, item_data);
     }
     // else: "inventory full"?
 }
@@ -330,10 +331,10 @@ Vector2 get_active_position(Entity* ent) {
         //return get_tile_infront_entity(ent);
         return ent->position;
         break;
-    /*case ATTACK_MELEE:
-        return ent->original_position;*/
+        /*case ATTACK_MELEE:
+            return ent->original_position;*/
         break;
-    default: 
+    default:
         break;
     }
     return ent->original_position;
@@ -366,9 +367,9 @@ bool entity_exists_on_tile(int col, int row, Entity* ent) {
     Vector2 pos = (Vector2){ col, row };
     Vector2 ent_target_position = get_tile_infront_entity(ent);
     if (
-      (ent->state == MOVE && Vector2Equals(ent_target_position, pos) && Vector2Equals(ent->position, pos))
-    || (ent->state != MOVE && Vector2Equals(ent->original_position, pos))
-    ) {
+        (ent->state == MOVE && Vector2Equals(ent_target_position, pos) && Vector2Equals(ent->position, pos))
+        || (ent->state != MOVE && Vector2Equals(ent->original_position, pos))
+        ) {
         return true;
     }
     return false;
@@ -384,12 +385,14 @@ void reset_entity_state(Entity* ent, bool use_turn) {
     }
 }
 
-void move_entity_forward(Entity* ent) {
+void move_entity_forward(Entity* ent, MapData* map_data) {
     //if (ent->state != MOVE) return;
 
     const Vector2 movement = direction_to_vector2(ent->direction);
     //const Vector2 normalized_movement = Vector2Normalize(movement); // Normalize the movement vector
     const Vector2 targ = Vector2Add(ent->original_position, movement);
+    map_data->tiles[(int)ent->original_position.x][(int)ent->original_position.y].reserved = false;
+    map_data->tiles[(int)targ.x][(int)targ.y].reserved = false;
 
     float distance_to_target = Vector2Distance(ent->position, targ);
 
@@ -452,7 +455,7 @@ void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, Ite
                     return;
                 }
             }
-		}
+        }
     }
 
     bool should_move = false;
@@ -495,14 +498,14 @@ void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, Ite
     if (IsKeyDown(KEY_SPACE)) {
         should_move = false;
 
-		Vector2 mouse_grid_pos_dir = Vector2Clamp(
-			Vector2Subtract(grid_mouse_position, ent->original_position),
-			(Vector2) {
-			-1.0f, -1.0f
-		},
-		(Vector2) {
-			1.0f, 1.0f
-		});
+        Vector2 mouse_grid_pos_dir = Vector2Clamp(
+            Vector2Subtract(grid_mouse_position, ent->original_position),
+            (Vector2) {
+            -1.0f, -1.0f
+        },
+            (Vector2) {
+            1.0f, 1.0f
+        });
         if (Vector2Length(GetMouseDelta()) != 0.0f && Vector2Length(mouse_grid_pos_dir) != 0.0f)
             ent->direction = vector_to_direction(mouse_grid_pos_dir);
     }
@@ -519,9 +522,9 @@ void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, Ite
         /*if (ent->prevent_pickup)
             ent->prevent_pickup = false;*/
 
-        // printf("MOVE!\n");
-        // printf("X: %2.0f -> %2.0f\n", ent->position.x, ent->position.x+1.0f);
-        // printf("Y: %2.0f -> %2.0f\n", ent->position.y, ent->position.y+1.0f);
+            // printf("MOVE!\n");
+            // printf("X: %2.0f -> %2.0f\n", ent->position.x, ent->position.x+1.0f);
+            // printf("Y: %2.0f -> %2.0f\n", ent->position.y, ent->position.y+1.0f);
         Vector2 target_position = Vector2Add(ent->original_position, movement);
         // printf("Target: %2.5f, %2.5f\n", ent->targetPosition.x, ent->targetPosition.y);
         int i_targ_x = (int)target_position.x;
@@ -548,14 +551,14 @@ void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, Ite
         if (any_entity_exists_on_tile(i_targ_x, i_targ_y, entity_data, ent, &swapi)) {
             //printf("Tried to walk on tile with entity\n");
             if (swapi != -1)
-				if (!entity_data->entities[swapi].can_swap_positions) {
-					/*ent->should_move = false;
-					ent->state = IDLE;*/
-					//ent->state = IDLE;
-					//should_move = false;
-					reset_entity_state(ent, false);
-					return;
-				}
+                if (!entity_data->entities[swapi].can_swap_positions) {
+                    /*ent->should_move = false;
+                    ent->state = IDLE;*/
+                    //ent->state = IDLE;
+                    //should_move = false;
+                    reset_entity_state(ent, false);
+                    return;
+                }
             //else if (entity_data->entities[swapi].can_swap_positions) {
             //    swap_entity_positions(en, &entity_data->entities[swapi]);
             //   /* ent->should_move = false;
@@ -675,7 +678,7 @@ void render_entity(Entity* ent, Font* fonts, EntityData* entity_data) {
         BLUE
     );*/
 
-	// DrawRectangleLines(
+    // DrawRectangleLines(
     //  gridPosition.x, gridPosition.y, SPRITE_SIZE, SPRITE_SIZE, BLACK);
 
     Color tnt = WHITE;
@@ -690,12 +693,13 @@ void render_entity(Entity* ent, Font* fonts, EntityData* entity_data) {
         Fade(BLACK, 0.5f - (ent->fade_timer / FADE_DURATION))
     );
 
-	DrawTextureRec(
-		ent->texture,
-		(Rectangle) {
-		ent->animation.cur_frame* SPRITE_SIZE, ent->animation.y_offset + (ent->direction * SPRITE_SIZE), SPRITE_SIZE, SPRITE_SIZE},
-		grid_position, 
-		tnt
+    DrawTextureRec(
+        ent->texture,
+        (Rectangle) {
+        ent->animation.cur_frame* SPRITE_SIZE, ent->animation.y_offset + (ent->direction * SPRITE_SIZE), SPRITE_SIZE, SPRITE_SIZE
+    },
+        grid_position,
+            tnt
             );
 
     //if (ent->fade_timer >= 0.0f) {
@@ -774,13 +778,13 @@ void lunge_entity(Entity* ent, float lunge_distance, float lunge_speed) {
 }
 
 void switch_to_idle_y_offset(Entity* ent) {
-	if (ent->animation.y_offset != 0) {
-		ent->cur_move_anim_extra_frame++;
-	}
-	if (ent->cur_move_anim_extra_frame >= MOVE_ANIMATION_EXTRA_FRAMES) {
-		//ent->animation.max_frame_time = 0.02f;
-		ent->animation.y_offset = 0;
-	}
+    if (ent->animation.y_offset != 0) {
+        ent->cur_move_anim_extra_frame++;
+    }
+    if (ent->cur_move_anim_extra_frame >= MOVE_ANIMATION_EXTRA_FRAMES) {
+        //ent->animation.max_frame_time = 0.02f;
+        ent->animation.y_offset = 0;
+    }
 }
 
 void update_animation_state(Entity* ent) {
@@ -791,12 +795,12 @@ void update_animation_state(Entity* ent) {
 
             ent->animation.max_frame_time = 0.020f;
             switch_to_idle_y_offset(ent);
-            
+
             break;
         }
         case MOVE: {
             ent->animation.max_frame_time = 0.030f;
-			ent->animation.y_offset = 2048;
+            ent->animation.y_offset = 2048;
             break;
         }
         case ATTACK_MELEE: {
@@ -875,9 +879,9 @@ void update_animation_state(Entity* ent) {
         break;
     }
 
-	if (ent->state == MOVE) {
-		ent->cur_move_anim_extra_frame = 0;
-	}
+    if (ent->state == MOVE) {
+        ent->cur_move_anim_extra_frame = 0;
+    }
 }
 
 Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* item_data, const EntityData* entity_data) {
@@ -930,30 +934,30 @@ void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
     if (!entity->can_pickup) return;
     //if (!entity->prevent_pickup) {
         // entity can pickup item
-        for (int i = 0; i < item_data->item_counter; i++) {
-            Item* item = &item_data->items[i];
-            // item exists on same tile as entity
-            if (
-                (entity->state == MOVE && Vector2Equals(item->position, get_tile_infront_entity(entity))
-             && (!Vector2Equals(item->position, entity->original_position))
-			)) {
-                pickup_item(i, item_data, entity);
-                break;
-            }
+    for (int i = 0; i < item_data->item_counter; i++) {
+        Item* item = &item_data->items[i];
+        // item exists on same tile as entity
+        if (
+            (entity->state == MOVE && Vector2Equals(item->position, get_tile_infront_entity(entity))
+                && (!Vector2Equals(item->position, entity->original_position))
+                )) {
+            pickup_item(i, item_data, entity);
+            break;
         }
+    }
     //}
 }
 
 void get_item_name(enum ItemType it, char* buf) {
     switch (it) {
     default:
-        sprintf_s(buf, 9, "empty"); 
+        sprintf_s(buf, 9, "empty");
         break;
     case ITEM_APPLE:
-        sprintf_s(buf, 6, "apple"); 
+        sprintf_s(buf, 6, "apple");
         break;
     case ITEM_STICK:
-        sprintf_s(buf, 6, "stick"); 
+        sprintf_s(buf, 6, "stick");
         break;
     case ITEM_SPILLEDCUP:
         sprintf_s(buf, 12, "spilled cup");
@@ -999,7 +1003,7 @@ void render_ui(int window_width, int window_height, Entity* player, Font* fonts,
 
         int yy = y - 1;
         int xx = x + 2;
-        DrawTextEx(fonts[0], txt, (Vector2) { xx +2, yy +2 }, 24.0f, 1.0f, Fade(BLACK, 0.7f));
+        DrawTextEx(fonts[0], txt, (Vector2) { xx + 2, yy + 2 }, 24.0f, 1.0f, Fade(BLACK, 0.7f));
         DrawTextEx(fonts[0], txt, (Vector2) { xx, yy }, 24.0f, 1.0f, WHITE);
     }
 
@@ -1017,19 +1021,19 @@ void render_ui(int window_width, int window_height, Entity* player, Font* fonts,
         Rectangle hp_bar = (Rectangle){ x, y, w, h };
         int hp_hp = ((float)equipped_item->hp / (float)player->max_hp) * hp_bar.width;
 
-		//DrawRectangleGradientV(x, y, w, h, GRAY, (Color){30, 30, 30, 255});
-		DrawRectangleGradientV(x, y, w, h, (Color) { 30, 30, 30, 255 }, GRAY);
-		DrawRectangleGradientV(x, y, hp_hp, h, BLUE, (Color) { 0, 0, 202, 255 });
-		DrawRectangleRoundedLines(hp_bar, 0.5f, 1.0f, 2, BLACK);
+        //DrawRectangleGradientV(x, y, w, h, GRAY, (Color){30, 30, 30, 255});
+        DrawRectangleGradientV(x, y, w, h, (Color) { 30, 30, 30, 255 }, GRAY);
+        DrawRectangleGradientV(x, y, hp_hp, h, BLUE, (Color) { 0, 0, 202, 255 });
+        DrawRectangleRoundedLines(hp_bar, 0.5f, 1.0f, 2, BLACK);
 
-		char txt[16];
+        char txt[16];
         get_item_name(player->inventory[item_i].type, txt);
 
         Vector2 fs = MeasureTextEx(fonts[0], txt, 24.0f, 1.0f);
         //x = window_width - 30 - fs.x - 3;
 
-        DrawTextEx(fonts[0], txt, (Vector2) { x + 4, y + 2}, 24.0f, 1.0f, Fade(BLACK, 0.7f));
-        DrawTextEx(fonts[0], txt, (Vector2) { x+2, y }, 24.0f, 1.0f, WHITE);
+        DrawTextEx(fonts[0], txt, (Vector2) { x + 4, y + 2 }, 24.0f, 1.0f, Fade(BLACK, 0.7f));
+        DrawTextEx(fonts[0], txt, (Vector2) { x + 2, y }, 24.0f, 1.0f, WHITE);
 
     }
 
@@ -1097,7 +1101,7 @@ void remove_entity(const int index, EntityData* entity_data) {
     // Decrement the counter since one entity has been removed
     entity_data->entity_counter--;
 
-    printf("Deleted entity index %i, %i instances left on map.\n", index, entity_data->entity_counter-1);
+    printf("Deleted entity index %i, %i instances left on map.\n", index, entity_data->entity_counter - 1);
 }
 
 void nullify_all_entities(EntityData* entity_data) {
@@ -1111,14 +1115,14 @@ void nullify_all_entities(EntityData* entity_data) {
 void increment_entity_fade(Entity* ent) {
     ent->fade_timer += GetFrameTime();
 
-	if (ent->fade_timer >= FADE_DURATION) {
+    if (ent->fade_timer >= FADE_DURATION) {
         ent->faded = true;
         //ent->opacity = 0.0f;  // Ensure opacity is set to 0 when fading completes
-	}
-	else {
-		// Linear interpolation of opacity based on fading progress
+    }
+    else {
+        // Linear interpolation of opacity based on fading progress
         //ent->opacity = 1.0f - (ent->fade_timer / FADE_DURATION);
-	}
+    }
 }
 
 void generate_enchanted_groves_dungeon_texture(MapData* map_data, RenderTexture2D* dungeon_texture/*DungeonTexture* dungeon_texture*/) {
@@ -1235,13 +1239,13 @@ bool is_entity_visible(Entity* from, Entity* to, MapData* map_data, bool look_in
         if (to->cur_room != from->cur_room) {
 
             if (to->state != MOVE)
-				return false;
+                return false;
             else {
                 if (get_room_id_at_position(
-                    get_tile_infront_entity(to).x, 
-                    get_tile_infront_entity(to).y, 
+                    get_tile_infront_entity(to).x,
+                    get_tile_infront_entity(to).y,
                     map_data) == from->cur_room) {
-						return true;
+                    return true;
                 }
                 else {
                     return false;
@@ -1251,10 +1255,10 @@ bool is_entity_visible(Entity* from, Entity* to, MapData* map_data, bool look_in
     }
     // in corridor
     else {
-		//float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
-		float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
-		//printf("Distance: %2.5f\n", distance);
-        if (distance > map_data->view_distance) 
+        //float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
+        float distance = Vector2DistanceSqr(get_active_position(from), get_active_position(to));
+        //printf("Distance: %2.5f\n", distance);
+        if (distance > map_data->view_distance)
             return false;
     }
     return true;
@@ -1318,7 +1322,7 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         Vector2 movement = Vector2Subtract(next_v, ent->original_position);
 
         if (ent->state == IDLE)
-			ent->direction = vector_to_direction(movement);
+            ent->direction = vector_to_direction(movement);
 
         if (any_entity_exists_on_tile(next_v.x, next_v.y, entity_data, ent, NULL)
             && !entity_exists_on_tile(next_v.x, next_v.y, target)) {
@@ -1332,7 +1336,7 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         // If next to target and it's this entity's turn, attack
         Vector2 movement = Vector2Subtract(target_pos, ent->original_position);
         if (ent->state == IDLE)
-			ent->direction = vector_to_direction(movement);
+            ent->direction = vector_to_direction(movement);
         ent->state = ATTACK_MELEE;
     }
 }
@@ -1373,7 +1377,7 @@ bool entity_finished_turn(Entity* ent) {
         return ent->faded;
     }
     else {
-        return (ent->state == IDLE  && ent->n_turn >= ent->max_turns);
+        return (ent->state == IDLE && ent->n_turn >= ent->max_turns);
     }
 }
 
@@ -1394,7 +1398,7 @@ int value_variation(float value, int percentage) {
     return (int)roundf(value);
 }
 
-int get_melee_attack_damage(Entity* ent, int *self_damage, bool *crit) {
+int get_melee_attack_damage(Entity* ent, int* self_damage, bool* crit) {
     float damage = (float)ent->atk;
 
     // todo: ui etc for equipped item
@@ -1418,21 +1422,21 @@ int get_melee_attack_damage(Entity* ent, int *self_damage, bool *crit) {
         *self_damage = 100;
         break;
     }
-	case ITEM_STICK: {
+    case ITEM_STICK: {
         // crit
-		damage *= 2.5f;
+        damage *= 2.5f;
         if (GetRandomValue(0, 2) == 0) {
             damage *= 1.7f;
             *crit = true;
         }
 
         *self_damage = GetRandomValue(45, 50);
-		break;
-	}
-	default:
-		break;
-	}
-    
+        break;
+    }
+    default:
+        break;
+    }
+
     damage = value_variation(damage, 5);
     //printf("Damage: %2.5f\n", fdamage);
 
@@ -1442,7 +1446,7 @@ int get_melee_attack_damage(Entity* ent, int *self_damage, bool *crit) {
 void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, bool crit, EntityData* entity_data) {
     printf("Damage: %i\n", amount);
     to->hp -= amount;
-    
+
     // spin the damaged entity around to look at the other ent
 
     Vector2 direction = Vector2Clamp(Vector2Subtract(from->original_position, to->original_position),
@@ -1454,7 +1458,7 @@ void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, b
     });
 
     /*if (change_direction && to->state == IDLE && !Vector2Equals(direction, (Vector2){0.0f, 0.0f}))
-		to->direction = vector_to_direction(direction);*/
+        to->direction = vector_to_direction(direction);*/
 
     from->attack_damage_given = true;
     to->found_target = true; // for ai
@@ -1478,7 +1482,7 @@ void process_attack(Entity* ent, EntityData* entity_data) {
 
     switch (attack_state) {
     case ATTACK_MELEE: {
-        
+
         Vector2 tile = get_tile_infront_entity(ent);
 
         int id = 0;
@@ -1489,13 +1493,13 @@ void process_attack(Entity* ent, EntityData* entity_data) {
 
                     bool crit = false;
 
-					int damage = get_melee_attack_damage(ent, &self_damage, &crit);
+                    int damage = get_melee_attack_damage(ent, &self_damage, &crit);
                     //printf("Damage: %i ||| Self Damage: %i\n", damage, self_damage);
 
                     apply_damage(&entity_data->entities[id], ent, damage, true, crit, entity_data);
 
                     ent->inventory[ent->equipped_item_index].hp -= self_damage;
-				}
+                }
             }
         }
         break;
@@ -1510,7 +1514,7 @@ void process_attack(Entity* ent, EntityData* entity_data) {
     }
 }
 
-void process_entity_state(Entity* ent, EntityData* entity_data) {
+void process_entity_state(Entity* ent, EntityData* entity_data, MapData* map_data) {
     switch (ent->state) {
     case IDLE: {
         // not really supposed to trigger here
@@ -1522,12 +1526,12 @@ void process_entity_state(Entity* ent, EntityData* entity_data) {
         break;
     }
     case MOVE: {
-        move_entity_forward(ent);
+        move_entity_forward(ent, map_data);
         break;
     }
     case ATTACK_MELEE: {
         if (ent->attack_delay < ATTACK_DELAY_DURATION) {
-            if (ent->animation.cur_frame != 0) 
+            if (ent->animation.cur_frame != 0)
                 ent->animation.cur_frame = 0;
             ent->attack_delay += GetFrameTime();
             break;
@@ -1535,14 +1539,14 @@ void process_entity_state(Entity* ent, EntityData* entity_data) {
         process_attack(ent, entity_data);
         switch (ent->ent_type) {
         default:
-			lunge_entity(ent, 1.0f, 2.5f);
-			break;
+            lunge_entity(ent, 1.0f, 2.5f);
+            break;
         case ENT_ZOR:
-			lunge_entity(ent, 1.2f, 2.9f);
-			break;
+            lunge_entity(ent, 1.2f, 2.9f);
+            break;
         case ENT_FLY:
             lunge_entity(ent, 1.4f, 3.0f);
-			break;
+            break;
         }
         break;
     }
@@ -1635,10 +1639,10 @@ int main(void/*int argc, char* argv[]*/) {
                 map_data = generate_map(DUNGEON_PRESET_BASIC);
                 generate_enchanted_groves_dungeon_texture(&map_data, &dungeon_texture);
 
-				// init the entities
+                // init the entities
                 nullify_all_entities(&entity_data);
                 create_entity_instance(&entity_data, default_ent_zor());
-				zor = GET_LAST_ENTITY_REF();
+                zor = GET_LAST_ENTITY_REF();
                 zor->max_turns = 1;
                 zor->atk = 3;
                 for (int i = 0; i < 5; i++)
@@ -1648,17 +1652,17 @@ int main(void/*int argc, char* argv[]*/) {
                     GET_LAST_ENTITY_REF()->atk = 3;
                     GET_LAST_ENTITY_REF()->max_turns = 2;
                 }*/
-                        
+
                 // init items
-				nullify_all_items(&item_data);
-                spawn_items_on_random_tiles((Item) { ITEM_STICK, ITEMCAT_WEAPON}, & item_data, & map_data, 5, 8);
-                spawn_items_on_random_tiles((Item) { ITEM_APPLE, ITEMCAT_CONSUMABLE }, &item_data, &map_data, 4, 7);
-                spawn_items_on_random_tiles((Item) { ITEM_SPILLEDCUP, ITEMCAT_CONSUMABLE }, &item_data, &map_data, 2, 4);
+                nullify_all_items(&item_data);
+                spawn_items_on_random_tiles((Item) { ITEM_STICK, ITEMCAT_WEAPON }, & item_data, & map_data, 5, 8);
+                spawn_items_on_random_tiles((Item) { ITEM_APPLE, ITEMCAT_CONSUMABLE }, & item_data, & map_data, 4, 7);
+                spawn_items_on_random_tiles((Item) { ITEM_SPILLEDCUP, ITEMCAT_CONSUMABLE }, & item_data, & map_data, 2, 4);
 
                 for (int i = 0; i < entity_data.entity_counter; i++) {
                     Entity* ent = &entity_data.entities[i];
                     reset_entity_state(ent, false);
-                    set_entity_position(ent, find_random_empty_floor_tile(&map_data, &item_data, &entity_data));
+                    set_entity_position(ent, find_random_empty_floor_tile(&map_data, &item_data, &entity_data), &map_data);
                 }
 
                 printf("Init basic dungeon.\n");
@@ -1682,10 +1686,10 @@ int main(void/*int argc, char* argv[]*/) {
         //cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
         //printf("Cur room: %i\n", zor->cur_room);
 
-		// check for ents who are dead
+        // check for ents who are dead
         for (int i = 0; i < entity_data.entity_counter; ) {
             Entity* ent = &entity_data.entities[i];
-            
+
             Vector2 act = get_active_position(ent);
             ent->cur_room = get_room_id_at_position(act.x, act.y, &map_data);
 
@@ -1698,30 +1702,30 @@ int main(void/*int argc, char* argv[]*/) {
                     remove_entity(i, &entity_data);
                 }
                 else {
-			        i++;
+                    i++;
                 }
             }
             else {
-				// ent alive
-				i++;
+                // ent alive
+                i++;
             }
         }
 
-       /* if (player_is_dead) {
-            set_gamestate(&gsi, GS_INTRO_DUNGEON);
-            continue;
-        }*/
+        /* if (player_is_dead) {
+             set_gamestate(&gsi, GS_INTRO_DUNGEON);
+             continue;
+         }*/
 
-        // ================================================================== //
+         // ================================================================== //
 
-        // debug statements
-        //printf("\nEntity turn id: %i\n", cur_turn_entity_index);
-        /*for (int i =24 0; i < entity_data.entity_counter; i++) {
-            Entity* ent = &entity_data.entities[i];
-            printf("Entity %i state %i async %i ||| turn %i/%i ||| maxframe %.5f\n", i, ent->state, (int)ent->sync_move, ent->n_turn, ent->max_turns, ent->animation.max_frame_time);
-        }*/
+         // debug statements
+         //printf("\nEntity turn id: %i\n", cur_turn_entity_index);
+         /*for (int i =24 0; i < entity_data.entity_counter; i++) {
+             Entity* ent = &entity_data.entities[i];
+             printf("Entity %i state %i async %i ||| turn %i/%i ||| maxframe %.5f\n", i, ent->state, (int)ent->sync_move, ent->n_turn, ent->max_turns, ent->animation.max_frame_time);
+         }*/
 
-        // process entities who are in sync moving
+         // process entities who are in sync moving
         if (sync_moving_entity_exists(&entity_data)) {
 
             for (int i = 0; i < entity_data.entity_counter; i++) {
@@ -1751,7 +1755,7 @@ int main(void/*int argc, char* argv[]*/) {
                     if (ent->state == IDLE || ent->state == SKIP_TURN) {
                         entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
                     }
-                    process_entity_state(ent, &entity_data);
+                    process_entity_state(ent, &entity_data, &map_data);
                 }
             }
         }
@@ -1788,7 +1792,7 @@ int main(void/*int argc, char* argv[]*/) {
                 if (is_entity_dead(this_ent))
                     this_ent->state = IDLE;
 
-                process_entity_state(this_ent, &entity_data);
+                process_entity_state(this_ent, &entity_data, &map_data);
 
                 // entity finished turn?
                 if (entity_finished_turn(this_ent)) {
@@ -1814,11 +1818,11 @@ int main(void/*int argc, char* argv[]*/) {
             if (is_entity_dead(ent)) continue;
 
 
-			update_animation_state(ent);
+            update_animation_state(ent);
             update_animation(&ent->animation);
 
 
-			//scan_items_for_pickup(&item_data, ent);
+            //scan_items_for_pickup(&item_data, ent);
         }
 
 
@@ -1828,7 +1832,7 @@ int main(void/*int argc, char* argv[]*/) {
             cam_target = Vector2Multiply(zor->original_position, (Vector2) { TILE_SIZE, TILE_SIZE });
         }
         else {
-			cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+            cam_target = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
         }
 
         cam_target.x += ((TILE_SIZE - SPRITE_SIZE) / 2) + (SPRITE_SIZE / 2);
@@ -1849,7 +1853,10 @@ int main(void/*int argc, char* argv[]*/) {
                         printf("C ");
                         break;
                     case TILE_FLOOR: {
-                        printf("X ");
+                        if (map_data.tiles[col][row].reserved)
+                            printf("R ");
+                        else
+							printf("X ");
                         break;
                     }
                     case TILE_INVALID: {
@@ -1876,94 +1883,94 @@ int main(void/*int argc, char* argv[]*/) {
         }
 
 
-		decrement_entity_notif_timer(&entity_data);
+        decrement_entity_notif_timer(&entity_data);
 
-		// do rendering
-		BeginDrawing();
-		{
-			ClearBackground(BLACK);
+        // do rendering
+        BeginDrawing();
+        {
+            ClearBackground(BLACK);
 
-			DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
-			DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
+            DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
+            DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
 
-			BeginMode2D(camera);
-			{
-				// render map
-				DrawTexture(dungeon_texture.texture, 0, 0, WHITE);
-				for (int row = 0; row < map_data.rows; row++) {
-					for (int col = 0; col < map_data.cols; col++) {
-						Color clr = LIGHTGREEN;
-						if (IsKeyDown(KEY_SPACE) && map_data.tiles[col][row].type != TILE_WALL) {
-							Color clr = BLACK_SEMI_TRANSPARENT;
+            BeginMode2D(camera);
+            {
+                // render map
+                DrawTexture(dungeon_texture.texture, 0, 0, WHITE);
+                for (int row = 0; row < map_data.rows; row++) {
+                    for (int col = 0; col < map_data.cols; col++) {
+                        Color clr = LIGHTGREEN;
+                        if (IsKeyDown(KEY_SPACE) && map_data.tiles[col][row].type != TILE_WALL) {
+                            Color clr = BLACK_SEMI_TRANSPARENT;
 
-							grid_mouse_position = GetMousePosition();
-							grid_mouse_position = GetScreenToWorld2D(grid_mouse_position, camera);
-							grid_mouse_position = Vector2Divide(grid_mouse_position, (Vector2) { TILE_SIZE, TILE_SIZE });
-							grid_mouse_position.x = floorf(grid_mouse_position.x);
-							grid_mouse_position.y = floorf(grid_mouse_position.y);
-							//print_vector2(grid_mouse_position);
+                            grid_mouse_position = GetMousePosition();
+                            grid_mouse_position = GetScreenToWorld2D(grid_mouse_position, camera);
+                            grid_mouse_position = Vector2Divide(grid_mouse_position, (Vector2) { TILE_SIZE, TILE_SIZE });
+                            grid_mouse_position.x = floorf(grid_mouse_position.x);
+                            grid_mouse_position.y = floorf(grid_mouse_position.y);
+                            //print_vector2(grid_mouse_position);
 
-							if (grid_mouse_position.x == col && grid_mouse_position.y == row) {
-								clr = YELLOW;
-							}
+                            if (grid_mouse_position.x == col && grid_mouse_position.y == row) {
+                                clr = YELLOW;
+                            }
 
-							if (Vector2Equals(get_tile_infront_entity(zor), (Vector2){col, row})) {
-								clr = ORANGE;
-							}
-							
-							Vector2 mouse_grid_pos_dir = Vector2Clamp(
-								Vector2Subtract(grid_mouse_position, zor->original_position),
-								(Vector2) {
-								-1.0f, -1.0f
-							},
-								(Vector2) {
-								1.0f, 1.0f
-							});
-							//print_vector2(mouse_grid_pos_dir);
-							
-							if (Vector2Equals(Vector2Add(zor->original_position, mouse_grid_pos_dir), (Vector2) { col, row })) {
-								clr = RED;
-							}
+                            if (Vector2Equals(get_tile_infront_entity(zor), (Vector2) { col, row })) {
+                                clr = ORANGE;
+                            }
 
-							DrawRectangleLines(
-								col * TILE_SIZE,
-								row * TILE_SIZE,
-								TILE_SIZE,
-								TILE_SIZE,
-								clr);
-					}
-					}
-				}
+                            Vector2 mouse_grid_pos_dir = Vector2Clamp(
+                                Vector2Subtract(grid_mouse_position, zor->original_position),
+                                (Vector2) {
+                                -1.0f, -1.0f
+                            },
+                                (Vector2) {
+                                1.0f, 1.0f
+                            });
+                            //print_vector2(mouse_grid_pos_dir);
 
-				// render items
-				for (int i = 0; i < item_data.item_counter; i++) {
+                            if (Vector2Equals(Vector2Add(zor->original_position, mouse_grid_pos_dir), (Vector2) { col, row })) {
+                                clr = RED;
+                            }
+
+                            DrawRectangleLines(
+                                col * TILE_SIZE,
+                                row * TILE_SIZE,
+                                TILE_SIZE,
+                                TILE_SIZE,
+                                clr);
+                        }
+                    }
+                }
+
+                // render items
+                for (int i = 0; i < item_data.item_counter; i++) {
                     if (!is_item_visible(zor, &item_data.items[i], &map_data)) continue;
 
-					switch (item_data.items[i].type) {
-					case ITEM_NOTHING: {
-						printf("Error: Tried to render ITEM_NOTHING.");
-						break;
-					}
-					case ITEM_SPILLEDCUP: {
-						DrawTextureRec(texture_item_spilledcup, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
-						break;
-					}
-					case ITEM_STICK: {
-						DrawTextureRec(texture_item_stick, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
-						break;
-					}
-					case ITEM_APPLE: {
-						DrawTextureRec(texture_item_apple, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
-						break;
-					}
-					default: {
-						printf("Idk\n");
-						break;
-					}
-					}
-				}
-			} // end camera rendering
-			EndMode2D();
+                    switch (item_data.items[i].type) {
+                    case ITEM_NOTHING: {
+                        printf("Error: Tried to render ITEM_NOTHING.");
+                        break;
+                    }
+                    case ITEM_SPILLEDCUP: {
+                        DrawTextureRec(texture_item_spilledcup, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
+                        break;
+                    }
+                    case ITEM_STICK: {
+                        DrawTextureRec(texture_item_stick, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
+                        break;
+                    }
+                    case ITEM_APPLE: {
+                        DrawTextureRec(texture_item_apple, (Rectangle) { 0.0f, 0.0f, SPRITE_SIZE, SPRITE_SIZE }, position_to_grid_position(item_data.items[i].position), WHITE);
+                        break;
+                    }
+                    default: {
+                        printf("Idk\n");
+                        break;
+                    }
+                    }
+                }
+            } // end camera rendering
+            EndMode2D();
 
             // render fog texture
             {
@@ -2000,9 +2007,9 @@ int main(void/*int argc, char* argv[]*/) {
                     Vector2 pos = { 0 };
 
                     if (zor->state != MOVE)
-						pos = Vector2Multiply(zor->original_position, (Vector2) { TILE_SIZE, TILE_SIZE });
-                    else 
-						pos = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
+                        pos = Vector2Multiply(zor->original_position, (Vector2) { TILE_SIZE, TILE_SIZE });
+                    else
+                        pos = Vector2Multiply(zor->position, (Vector2) { TILE_SIZE, TILE_SIZE });
 
                     pos.x += TILE_SIZE / 2;
                     pos.y -= TILE_SIZE / 4;
@@ -2021,48 +2028,48 @@ int main(void/*int argc, char* argv[]*/) {
             }
 
             BeginMode2D(camera);
-			// y sort render entities
-			{
-				bool rendered[MAX_INSTANCES] = { false };
-				for (int i = 0; i < entity_data.entity_counter; i++) {
-					int lowest_y = 99999;
-					int index_to_render = -1;
+            // y sort render entities
+            {
+                bool rendered[MAX_INSTANCES] = { false };
+                for (int i = 0; i < entity_data.entity_counter; i++) {
+                    int lowest_y = 99999;
+                    int index_to_render = -1;
 
-					for (int e = 0; e < entity_data.entity_counter; e++) {
-						Entity* ent = &entity_data.entities[e];
+                    for (int e = 0; e < entity_data.entity_counter; e++) {
+                        Entity* ent = &entity_data.entities[e];
 
                         if (e != 0) {
                             if (!is_entity_visible(zor, ent, &map_data, false)) continue;
                         }
 
-						//Vector2 text_pos = position_to_grid_position(ent->position);
+                        //Vector2 text_pos = position_to_grid_position(ent->position);
 
-					  /*  char txt[8];
-						sprintf_s(txt, 2, "%i", e);
-						DrawText(txt, text_pos.x, text_pos.y, 24, WHITE);*/
+                      /*  char txt[8];
+                        sprintf_s(txt, 2, "%i", e);
+                        DrawText(txt, text_pos.x, text_pos.y, 24, WHITE);*/
 
-						int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
-						//DrawRectangle(x_pos, y_pos, 50, 50, RED);
-						if (!rendered[e] && y_pos < lowest_y) {
-							lowest_y = y_pos;
-							index_to_render = e;
-						}
-					}
+                        int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
+                        //DrawRectangle(x_pos, y_pos, 50, 50, RED);
+                        if (!rendered[e] && y_pos < lowest_y) {
+                            lowest_y = y_pos;
+                            index_to_render = e;
+                        }
+                    }
 
-					if (index_to_render != -1) {
-						render_entity(&entity_data.entities[index_to_render], fonts, &entity_data);
-						rendered[index_to_render] = true;
-					}
-				}
-			}
+                    if (index_to_render != -1) {
+                        render_entity(&entity_data.entities[index_to_render], fonts, &entity_data);
+                        rendered[index_to_render] = true;
+                    }
+                }
+            }
             EndMode2D();
 
 
-			DrawFPS(10, 5);
-			render_player_inventory(zor);
+            DrawFPS(10, 5);
+            render_player_inventory(zor);
             render_ui(window_width, window_height, zor, fonts, cur_turn);
 
-		} // end rendering
+        } // end rendering
         EndDrawing();
     }
 

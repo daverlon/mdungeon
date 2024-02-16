@@ -170,7 +170,6 @@ typedef struct {
     Entity entities[MAX_INSTANCES];
     int entity_counter;
 
-
     // shouldnt be anymore than 2 at once
     DamagePopup damage_popups[MAX_DAMAGE_POPUPS];
 } EntityData;

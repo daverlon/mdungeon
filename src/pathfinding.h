@@ -39,4 +39,3 @@ typedef struct {
 extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
 
 extern bool isInPathList(PathList* pathList, Point p);
-

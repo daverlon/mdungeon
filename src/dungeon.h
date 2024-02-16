@@ -12,6 +12,8 @@ enum TileType {
 typedef struct {
     enum TileType type;
     bool found;
+    bool reserved;
+    bool path;
 } TileData;
 
 // typedef struct {
