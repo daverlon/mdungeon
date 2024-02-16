@@ -1428,15 +1428,15 @@ void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, E
     to->found_target = true; // for ai
 
     // shouldnt need more than 2 holders for damage popup
-    if (entity_data->damage_popups[0].notif_timer <= 0.0f) {
-        entity_data->damage_popups[0].notif_timer = DAMAGE_NOTIF_DURATION;
-        entity_data->damage_popups[0].amount = amount;
-        entity_data->damage_popups[0].position = to->original_position;
-    }
-    else {
-        entity_data->damage_popups[1].notif_timer = DAMAGE_NOTIF_DURATION;
-        entity_data->damage_popups[1].amount = amount;
-        entity_data->damage_popups[1].position = to->original_position;
+    for (int i = 0; i < MAX_DAMAGE_POPUPS; i++) {
+        // active timer
+        if (entity_data->damage_popups[i].notif_timer > 0.0f)
+            continue;
+
+        entity_data->damage_popups[i].notif_timer = DAMAGE_NOTIF_DURATION;
+        entity_data->damage_popups[i].amount = amount;
+        entity_data->damage_popups[i].position = to->original_position;
+        break;
     }
 }
 
