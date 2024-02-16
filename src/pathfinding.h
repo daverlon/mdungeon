@@ -36,6 +36,13 @@ typedef struct {
 //extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
 // extern void dijkstra(MapData* map, Point src, Point dest, PathList* pathList);
 // extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList);
-extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
+//extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
+//void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners, bool ents_block, Entity* ignore);
+
+
+extern void astar_around_ents(MapData* map, EntityData* entity_data, PathList* path_list, Point src, Point dest, Entity* src_ent, bool cut_world_corners);
+extern void astar_through_ents(MapData* map, PathList* pathList, Point src, Point dest, bool cut_world_corners);
+
+
 
 extern bool isInPathList(PathList* pathList, Point p);

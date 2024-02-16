@@ -154,7 +154,7 @@ enum Direction vector_to_direction(Vector2 vector) {
 void set_entity_position(Entity* ent, Vector2 pos, MapData* map_data) {
     ent->position = pos;
     ent->original_position = pos;
-    map_data->tiles[(int)pos.x][(int)pos.y].reserved = true;
+    //map_data->tiles[(int)pos.x][(int)pos.y].reserved = true;
 }
 
 Vector2 get_tile_infront_entity(Entity* ent) {
@@ -328,8 +328,8 @@ Vector2 get_active_position(Entity* ent) {
     switch (ent->state) {
     case MOVE:
         //return ent->position;
-        //return get_tile_infront_entity(ent);
-        return ent->position;
+        return get_tile_infront_entity(ent);
+        //return ent->position;
         break;
         /*case ATTACK_MELEE:
             return ent->original_position;*/
@@ -340,7 +340,6 @@ Vector2 get_active_position(Entity* ent) {
     return ent->original_position;
 }
 
-
 bool any_entity_exists_on_tile(int col, int row, const EntityData* entity_data, Entity* ignore, int* out) {
     Vector2 pos = (Vector2){ col, row };
     for (int i = 0; i < entity_data->entity_counter; i++) {
@@ -349,16 +348,13 @@ bool any_entity_exists_on_tile(int col, int row, const EntityData* entity_data, 
         if (ignore != NULL && ent == ignore) continue;
 
         Vector2 ent_target_position = get_tile_infront_entity(ent);
-        if (
-            (ent->state == MOVE && Vector2Equals(ent_target_position, pos))
-            || (ent->state != MOVE && Vector2Equals(ent->original_position, pos))
-            ) {
+        if ((ent->state == MOVE && Vector2Equals(ent_target_position, pos))
+            || (ent->state != MOVE && Vector2Equals(ent->original_position, pos)) ) {
             if (out != NULL) {
                 *out = i;
             }
             return true;
         }
-
     }
     return false;
 }
@@ -391,8 +387,13 @@ void move_entity_forward(Entity* ent, MapData* map_data) {
     const Vector2 movement = direction_to_vector2(ent->direction);
     //const Vector2 normalized_movement = Vector2Normalize(movement); // Normalize the movement vector
     const Vector2 targ = Vector2Add(ent->original_position, movement);
-    map_data->tiles[(int)ent->original_position.x][(int)ent->original_position.y].reserved = false;
-    map_data->tiles[(int)targ.x][(int)targ.y].reserved = false;
+
+    /*if (map_data->tiles[(int)targ.x][(int)targ.y].reserved) {
+        
+    }*/
+
+    //map_data->tiles[(int)targ.x][(int)targ.y].reserved = true;
+    //map_data->tiles[(int)ent->original_position.x][(int)ent->original_position.y].reserved = false;
 
     float distance_to_target = Vector2Distance(ent->position, targ);
 
@@ -410,31 +411,12 @@ void move_entity_forward(Entity* ent, MapData* map_data) {
     }
 }
 
-void swap_entity_positions(Entity* ent1, Entity* ent2) {
-
-    Vector2 ent1_direction = Vector2Subtract(ent2->position, ent1->position);
-    Vector2 ent2_direction = Vector2Subtract(ent1->position, ent2->position);
-
-    if (ent1->state == IDLE && ent2->state == IDLE) {
-        ent1->direction = vector_to_direction(ent1_direction);
-        ent2->direction = vector_to_direction(ent2_direction);
-
-        // Swap target positions
-        /*ent1->target_position = ent2->position;
-        ent2->target_position = ent1->position;*/
-    }
-
-    // Set entities to move
-    ent1->state = MOVE;
-    ent2->state = MOVE;
-}
-
 void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, ItemData* item_data, Vector2 grid_mouse_position) {
 
     // if no key is held, ensure that isMoving is set to false
     if (ent->state != IDLE) return;
 
-    if (IsKeyPressed(KEY_E)) {
+    if (IsKeyPressed(KEY_F)) {
         // check ground
         int buf = -1;
         if (item_exists_on_tile(ent->original_position.x, ent->original_position.y, item_data, &buf)) {
@@ -1200,14 +1182,31 @@ void generate_enchanted_groves_dungeon_texture(MapData* map_data, RenderTexture2
     UnloadTexture(terrain_texture);
 }
 
-PathList find_path_between_entities(MapData* map_data, bool cut_corners, Vector2 start_pos, Vector2 end_pos) {
-    PathList path_list = { .path = { 0 }, .length = 0 };
-    Point start_point = { (int)roundf(start_pos.x), (int)roundf(start_pos.y) };
-    Point target_point = { (int)roundf(end_pos.x), (int)roundf(end_pos.y) };
+//PathList find_sync_path_to_entity(MapData* map_data, Vector2 start_pos, Vector2 end_pos) {
+//    PathList path_list = { .path = { 0 }, .length = 0 };
+//    Point start_point = { (int)roundf(start_pos.x), (int)roundf(start_pos.y) };
+//    Point target_point = { (int)roundf(end_pos.x), (int)roundf(end_pos.y) };
+//
+//    aStarSearch(map_data, start_point, target_point, &path_list, true, false, NULL, NULL);
+//    return path_list;
+//}
 
-    aStarSearch(map_data, start_point, target_point, &path_list, cut_corners);
-    return path_list;
+Point vector2_to_point(Vector2 vec) {
+    return (Point) { (int)vec.x, (int)vec.y };
 }
+
+Vector2 point_to_vector2(Point point) {
+    return (Vector2) { point.x, point.y };
+}
+
+//PathList find_path_around_entities(MapData* map_data, Vector2 start_pos, Vector2 end_pos, EntityData* entity_data, Entity* ignore) {
+//    PathList path_list = { .path = { 0 }, .length = 0 };
+//    Point start_point = { (int)roundf(start_pos.x), (int)roundf(start_pos.y) };
+//    Point target_point = { (int)roundf(end_pos.x), (int)roundf(end_pos.y) };
+//
+//    aStarSearch(map_data, start_point, target_point, &path_list, false, true, entity_data, ignore);
+//    return path_list;
+//}
 
 bool is_entity_visible(Entity* from, Entity* to, MapData* map_data, bool look_into_corridors) {
     //printf("from %i - to %i\n", from->cur_room, to->cur_room);
@@ -1285,56 +1284,114 @@ bool is_item_visible(Entity* from, Item* item, MapData* map_data) {
     return true;
 }
 
+// from entity position -> map position
+//
+//extern void aStarSearch(MapData* map, PathList* path_list, Point src, Point dest, Entity src_ent, bool cut_world_corners);
+
+PathList find_path_around_ents(Entity* from_ent, Vector2 to_pos, bool cut_world_corners, MapData* map_data, EntityData* entity_data) {
+        PathList path_list = { .path = { 0 }, .length = 0 };
+
+        astar_around_ents(
+            map_data,
+            entity_data,
+            &path_list,
+            vector2_to_point(from_ent->original_position),
+            vector2_to_point(to_pos),
+            from_ent,
+            false);
+
+        return path_list;
+}
+
+PathList find_path_through_ents(Entity* from_ent, Vector2 to_pos, bool cut_world_corners, MapData* map_data, EntityData* entity_data) {
+    PathList path_list = { .path = { 0 }, .length = 0 };
+
+    astar_through_ents(
+        map_data,
+        &path_list,
+        vector2_to_point(from_ent->original_position),
+        vector2_to_point(to_pos),
+        false);
+
+    return path_list;
+}
+
 void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* entity_data, MapData* map_data) {
-    //if (ent->is_moving) return;
-    //if (target->is_moving) return;
 
     // calculate next move state
     if (!ent->found_target) {
         if (is_entity_visible(ent, target, map_data, false)) {
             if (!ent->found_target) {
                 ent->found_target = true;
-                //printf("Found target\n");
             }
         }
     }
+
     // still no target found
     if (!ent->found_target) {
         ent->state = SKIP_TURN;
         return;
     }
 
-    Vector2 target_pos = target->original_position;
-    if (target->state == MOVE) {
-        target_pos = get_tile_infront_entity(target);
-    }
-    else if (target->state == IDLE) {
-        target_pos = target->position;
-    }
-
-    // Find the path between the entity and the target
-    PathList path_list = find_path_between_entities(map_data, false, ent->original_position, target_pos);
+    // get active target position
+    Vector2 active = { 0 };
+    
+    PathList path_list = find_path_through_ents(
+        ent,
+        get_active_position(target),
+        false,
+        map_data,
+        entity_data
+    );
 
     // If a path is found, move towards the target, otherwise attack if adjacent
     if (path_list.length >= 1) {
         Point next_p = path_list.path[path_list.length - 1];
-        Vector2 next_v = (Vector2){ next_p.x, next_p.y };
+        Vector2 next_v = point_to_vector2(next_p);
         Vector2 movement = Vector2Subtract(next_v, ent->original_position);
+
+        // next pos has ent?
+        bool b = any_entity_exists_on_tile(next_p.x, next_p.y, entity_data, ent, NULL);
+        if (b) {
+            PathList alt_path = find_path_around_ents(
+                ent,
+                /*get_active_position(target)*/target->original_position,
+                false,
+                map_data,
+                entity_data);
+
+            // found valid alternative path
+            if (alt_path.length >= 1) {
+                bool over = abs(alt_path.length - path_list.length) > 3;
+                if (over) {
+                    ent->state = SKIP_TURN;
+                    return;
+                }
+                next_p = alt_path.path[alt_path.length - 1];
+                next_v = point_to_vector2(next_p);
+                movement = Vector2Subtract(next_v, ent->original_position);
+                
+                if (ent->state == IDLE)
+                    ent->direction = vector_to_direction(movement);
+                ent->state = MOVE;
+                return;
+            }
+            else {
+                ent->state = SKIP_TURN;
+                return;
+            }
+        }
+
+        //printf("Next pos: ");
+        //print_vector2(movement);
 
         if (ent->state == IDLE)
             ent->direction = vector_to_direction(movement);
-
-        if (any_entity_exists_on_tile(next_v.x, next_v.y, entity_data, ent, NULL)
-            && !entity_exists_on_tile(next_v.x, next_v.y, target)) {
-            ent->state = SKIP_TURN;
-        }
-        else {
-            ent->state = MOVE;
-        }
+        ent->state = MOVE;
     }
     else {
         // If next to target and it's this entity's turn, attack
-        Vector2 movement = Vector2Subtract(target_pos, ent->original_position);
+        Vector2 movement = Vector2Subtract(target->original_position, ent->original_position);
         if (ent->state == IDLE)
             ent->direction = vector_to_direction(movement);
         ent->state = ATTACK_MELEE;
@@ -1350,6 +1407,8 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
     else {
         switch (ent->ent_type) {
         case ENT_ZOR:
+            ent->state = SKIP_TURN;
+            break;
         case ENT_FLY: {
             ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
             break;
@@ -1518,7 +1577,7 @@ void process_entity_state(Entity* ent, EntityData* entity_data, MapData* map_dat
     switch (ent->state) {
     case IDLE: {
         // not really supposed to trigger here
-        reset_entity_state(ent, false);
+        //reset_entity_state(ent, false);
         break;
     }
     case SKIP_TURN: {
@@ -1569,7 +1628,7 @@ int main(void/*int argc, char* argv[]*/) {
     //SetTargetFPS(30);
     SetTargetFPS(144);
 
-    SetRandomSeed(99);
+    SetRandomSeed(545);
 
     Font fonts[1] = { 0 };
     fonts[0] = LoadFontEx("res/fonts/YanoneKaffeesatz-Regular.ttf", 144, NULL, NULL);
@@ -1643,15 +1702,15 @@ int main(void/*int argc, char* argv[]*/) {
                 nullify_all_entities(&entity_data);
                 create_entity_instance(&entity_data, default_ent_zor());
                 zor = GET_LAST_ENTITY_REF();
-                zor->max_turns = 1;
+                zor->max_turns = 2;
                 zor->atk = 3;
-                for (int i = 0; i < 5; i++)
+                for (int i = 0; i < 15; i++)
                     create_entity_instance(&entity_data, create_fly_entity());
-                /*for (int i = 0; i < 3; i++) {
+                for (int i = 0; i < 2; i++) {
                     create_entity_instance(&entity_data, default_ent_zor());
-                    GET_LAST_ENTITY_REF()->atk = 3;
-                    GET_LAST_ENTITY_REF()->max_turns = 2;
-                }*/
+                   /* GET_LAST_ENTITY_REF()->atk = 3;
+                    GET_LAST_ENTITY_REF()->max_turns = 2;*/
+                }
 
                 // init items
                 nullify_all_items(&item_data);
@@ -1669,6 +1728,7 @@ int main(void/*int argc, char* argv[]*/) {
                 gsi.init = true;
             }
             if (IsKeyPressed(KEY_R)) {
+                cur_turn = 0;
                 set_gamestate(&gsi, GS_INTRO_DUNGEON);
                 entity_data.entity_counter = 0;
             }
@@ -1752,10 +1812,14 @@ int main(void/*int argc, char* argv[]*/) {
                 }
                 else {
                     // if not, rethink turn and process it
-                    if (ent->state == IDLE || ent->state == SKIP_TURN) {
+                    //if (ent->state == IDLE || ent->state == SKIP_TURN) {
+                    if (ent->state != MOVE)
                         entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
-                    }
-                    process_entity_state(ent, &entity_data, &map_data);
+                    //}
+                    
+                    /*if ((ent->state != MOVE && i == cur_turn_entity_index)
+                        || (ent->state == MOVE))*/
+						process_entity_state(ent, &entity_data, &map_data);
                 }
             }
         }
@@ -1764,7 +1828,8 @@ int main(void/*int argc, char* argv[]*/) {
 
             Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
 
-            entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
+			if (this_ent->state != MOVE)
+				entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
 
             // check if sync entities should exist for this turn
             // and log them
@@ -1787,7 +1852,8 @@ int main(void/*int argc, char* argv[]*/) {
 
                 Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
 
-                entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
+				if (this_ent->state != MOVE)
+					entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
 
                 if (is_entity_dead(this_ent))
                     this_ent->state = IDLE;
@@ -1853,9 +1919,9 @@ int main(void/*int argc, char* argv[]*/) {
                         printf("C ");
                         break;
                     case TILE_FLOOR: {
-                        if (map_data.tiles[col][row].reserved)
+                        /*if (map_data.tiles[col][row].reserved)
                             printf("R ");
-                        else
+                        else*/
 							printf("X ");
                         break;
                     }
@@ -1926,7 +1992,9 @@ int main(void/*int argc, char* argv[]*/) {
                                 (Vector2) {
                                 1.0f, 1.0f
                             });
-                            //print_vector2(mouse_grid_pos_dir);
+
+                            if (IsMouseButtonReleased(MOUSE_BUTTON_RIGHT))
+								print_vector2(grid_mouse_position);
 
                             if (Vector2Equals(Vector2Add(zor->original_position, mouse_grid_pos_dir), (Vector2) { col, row })) {
                                 clr = RED;
@@ -2038,9 +2106,9 @@ int main(void/*int argc, char* argv[]*/) {
                     for (int e = 0; e < entity_data.entity_counter; e++) {
                         Entity* ent = &entity_data.entities[e];
 
-                        if (e != 0) {
+                        /*if (e != 0) {
                             if (!is_entity_visible(zor, ent, &map_data, false)) continue;
-                        }
+                        }*/
 
                         //Vector2 text_pos = position_to_grid_position(ent->position);
 
