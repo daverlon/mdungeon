@@ -1701,6 +1701,7 @@ int main(void/*int argc, char* argv[]*/) {
                     ent->n_turn = 0;
                     if (cur_turn_entity_index >= entity_data.entity_counter) {
                         cur_turn_entity_index = 0;
+                        cur_turn++;
                     }
                     ent->sync_move = false;
                 }
@@ -1754,6 +1755,7 @@ int main(void/*int argc, char* argv[]*/) {
                     this_ent->n_turn = 0;
                     if (cur_turn_entity_index >= entity_data.entity_counter) {
                         cur_turn_entity_index = 0;
+                        cur_turn++;
                     }
                 }
             }
