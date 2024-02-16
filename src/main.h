@@ -18,7 +18,10 @@
 #define DEFAULT_FRAME_COUNT 20
 
 #define FADE_DURATION 0.5f
-#define HURT_DURATION 1.0f
+
+// multiply with deltatime
+#define DAMAGE_NOTIF_DURATION 1.0f
+
 #define ATTACK_DELAY_DURATION 0.1f
 
 enum EntityState {
@@ -149,8 +152,9 @@ typedef struct {
     float fade_timer;
 
     // hurt animation
-    bool hurt;
-    float hurt_timer;
+    //bool hurt;
+    float damage_notif_timer[2];
+    int damage_notif_amount[2]; // may overlap with 2 attacks
 
     // attack timing
     float attack_delay;

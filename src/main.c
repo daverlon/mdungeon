@@ -537,7 +537,7 @@ Vector2 position_to_grid_position(Vector2 pos) {
     return gridPos;
 }
 
-void render_entity(Entity* ent) {
+void render_entity(Entity* ent, Font* fonts) {
     Vector2 grid_position = position_to_grid_position(ent->position);
     Vector2 grid_original_position = position_to_grid_position(ent->original_position);
     Vector2 grid_infront_position = position_to_grid_position(get_tile_infront_entity(ent));
@@ -545,12 +545,6 @@ void render_entity(Entity* ent) {
     // printf("%i\n", ent->animation.yOffset);
 
     // offset y
-    DrawCircle(
-        grid_position.x + (SPRITE_SIZE / 2.0f),
-        grid_position.y + (SPRITE_SIZE / 2.0f) + (SPRITE_SIZE / 4.0f),
-        35.0f,
-        BLACK_SEMI_TRANSPARENT
-    );
     /*DrawRectangle(
         grid_original_position.x + (SPRITE_SIZE / 2.0f),
         grid_original_position.y + (SPRITE_SIZE / 2.0f) + (SPRITE_SIZE / 4.0f),
@@ -573,11 +567,14 @@ void render_entity(Entity* ent) {
     if (ent->fade_timer > 0.0f) {
         tnt = Fade(WHITE, 1.0f - (ent->fade_timer / FADE_DURATION));
     }
-    else {
-        if (ent->hurt) {
-            tnt = RED;
-        }
-    }
+
+    DrawCircle(
+        grid_position.x + (SPRITE_SIZE / 2.0f),
+        grid_position.y + (SPRITE_SIZE / 2.0f) + (SPRITE_SIZE / 4.0f),
+        35.0f,
+        Fade(BLACK, 0.5f - (ent->fade_timer / FADE_DURATION))
+    );
+
 	DrawTextureRec(
 		ent->texture,
 		(Rectangle) {
@@ -586,15 +583,40 @@ void render_entity(Entity* ent) {
 		tnt
             );
 
-    if (ent->fade_timer >= 0.0f) {
-        // hp bar width
-        int hp_bar_x = grid_position.x + TILE_SIZE / 1.3 + 2;
-        int hp_bar_y = grid_position.y + SPRITE_SIZE / 1.2;
-        int hp_bar_height = 10;
-        int hp_bar_width = TILE_SIZE;
-        int hp_cur_width = ((float)ent->hp / (float)ent->max_hp) * (float)hp_bar_width;
-        DrawRectangle(hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height, BLACK);
-        DrawRectangle(hp_bar_x, hp_bar_y, hp_cur_width, hp_bar_height, GREEN);
+    //if (ent->fade_timer >= 0.0f) {
+    //    // hp bar width
+    //    int hp_bar_x = grid_position.x + TILE_SIZE / 1.3 + 2;
+    //    int hp_bar_y = grid_position.y + SPRITE_SIZE / 1.2;
+    //    int hp_bar_height = 10;
+    //    int hp_bar_width = TILE_SIZE;
+    //    int hp_cur_width = ((float)ent->hp / (float)ent->max_hp) * (float)hp_bar_width;
+    //    DrawRectangle(hp_bar_x, hp_bar_y, hp_bar_width, hp_bar_height, BLACK);
+    //    DrawRectangle(hp_bar_x, hp_bar_y, hp_cur_width, hp_bar_height, GREEN);
+    //}
+
+    // render damage notification
+
+    {
+        // grid position
+        // to position
+        Vector2 start = (Vector2){ grid_original_position.x + TILE_SIZE + TILE_SIZE /4, grid_original_position.y + TILE_SIZE};
+        Vector2 end = (Vector2){ start.x, start.y - 50};
+        for (int i = 0; i < 2; i++) {
+            float timer = ent->damage_notif_timer[i];
+            int amt = ent->damage_notif_amount[i];
+
+            if (timer <= 0.0f) continue;
+
+            float progress = (1.0f - (timer / DAMAGE_NOTIF_DURATION));
+
+            //printf("Prog: %2.5f\n", progress);
+
+			Vector2 pos = Vector2Lerp(start, end, progress);
+
+            float font_size = 20.0f;
+            DrawTextEx(fonts[0], TextFormat("-%d", amt), (Vector2) { pos.x + 1, pos.y + 1 }, font_size, 1.0f, Fade(BLACK, 1.0f - progress));
+            DrawTextEx(fonts[0], TextFormat("-%d", amt), (Vector2) { pos.x, pos.y }, font_size, 1.0f, Fade(ORANGE, 1.0f - progress));
+        }
     }
 
 }
@@ -742,6 +764,11 @@ Vector2 find_random_empty_floor_tile(const MapData* map_data, const ItemData* it
         col = GetRandomValue(0, MAX_COLS);
         row = GetRandomValue(0, MAX_ROWS);
 
+        if (map_data->tiles[col + 1][row].type == TILE_CORRIDOR) continue; // right
+        if (map_data->tiles[col][row + 1].type == TILE_CORRIDOR) continue; // down
+        if (map_data->tiles[col - 1][row].type == TILE_CORRIDOR) continue; // left
+        if (map_data->tiles[col][row - 1].type == TILE_CORRIDOR) continue; // up
+
         // check if tile is TILE_FLOOR
         if (map_data->tiles[col][row].type != TILE_FLOOR)
             continue;
@@ -802,6 +829,13 @@ void spawn_items_on_random_tiles(Item item, ItemData* item_data, const MapData* 
         //for (int i = 0; i < n_spilledcups; i++) {
         int col = GetRandomValue(0, MAX_COLS);
         int row = GetRandomValue(0, MAX_ROWS);
+
+        // check adjacent tiles for corridor (may cause blocking)
+        if (map_data->tiles[col + 1][row].type == TILE_CORRIDOR) continue; // right
+        if (map_data->tiles[col][row+1].type == TILE_CORRIDOR) continue; // down
+        if (map_data->tiles[col-1][row].type == TILE_CORRIDOR) continue; // left
+        if (map_data->tiles[col][row-1].type == TILE_CORRIDOR) continue; // up
+
         if (map_data->tiles[col][row].type != TILE_FLOOR)
             continue;
         // tile is floor
@@ -1300,15 +1334,12 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
     }
 }
 
-void increment_entity_hurt_timer(Entity* ent) {
-
-	if (ent->hurt_timer >= HURT_DURATION) {
-		ent->hurt = false;
-        return;
-	}
-    ent->hurt_timer += GetFrameTime();
-
-    //printf("Hurt timer: %2.5f\n", ent->hurt_timer);
+void decrement_entity_notif_timer(Entity* ent) {
+    for (int i = 0; i < 2; i++) {
+        if (ent->damage_notif_timer[i] >= 0.0f) {
+            ent->damage_notif_timer[i] -= GetFrameTime();
+        }
+    }
 }
 
 bool is_entity_dead(Entity* ent) {
@@ -1328,16 +1359,6 @@ bool sync_moving_entity_exists(EntityData* entity_data) {
     for (int i = 0; i < entity_data->entity_counter; i++) {
         if (entity_data->entities[i].sync_move)
             return true;
-    }
-    return false;
-}
-
-bool entity_is_hurt(EntityData* entity_data) {
-    for (int i = 0; i < entity_data->entity_counter; i++) {
-        Entity* ent = &entity_data->entities[i];
-        if (ent->hurt) {
-            return true;
-        }
     }
     return false;
 }
@@ -1379,7 +1400,7 @@ int get_melee_attack_damage(Entity* ent, int *self_damage) {
         if (GetRandomValue(0, 2) == 0)
             damage *= 1.7f;
 
-        *self_damage = 50;
+        *self_damage = GetRandomValue(45, 50);
 		break;
 	}
 	default:
@@ -1412,9 +1433,14 @@ void apply_damage(Entity* to, Entity* from, int amount, bool change_direction) {
     from->attack_damage_given = true;
     to->found_target = true; // for ai
 
-    if (!to->hurt) {
-        to->hurt_timer = 0.0f;
-        to->hurt = true;
+    // shouldnt need more than 2 holders for damage popup
+    if (to->damage_notif_timer[0] <= 0.0f) {
+        to->damage_notif_timer[0] = DAMAGE_NOTIF_DURATION;
+		to->damage_notif_amount[0] = amount;
+    }
+    else {
+        to->damage_notif_timer[1] = DAMAGE_NOTIF_DURATION;
+		to->damage_notif_amount[1] = amount;
     }
 }
 
@@ -1478,7 +1504,7 @@ void process_entity_state(Entity* ent, EntityData* entity_data) {
 			lunge_entity(ent, 1.0f, 2.5f);
 			break;
         case ENT_ZOR:
-            lunge_entity(ent, 1.1f, 2.9f);
+            lunge_entity(ent, 1.2f, 2.9f);
 			break;
         case ENT_FLY:
             lunge_entity(ent, 1.4f, 3.0f);
@@ -1579,15 +1605,15 @@ int main(void/*int argc, char* argv[]*/) {
                 nullify_all_entities(&entity_data);
                 create_entity_instance(&entity_data, default_ent_zor());
 				zor = GET_LAST_ENTITY_REF();
-                zor->max_turns = 2;
+                zor->max_turns = 1;
                 zor->atk = 3;
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < 5; i++)
                     create_entity_instance(&entity_data, create_fly_entity());
-                for (int i = 0; i < 3; i++) {
+                /*for (int i = 0; i < 3; i++) {
                     create_entity_instance(&entity_data, default_ent_zor());
                     GET_LAST_ENTITY_REF()->atk = 3;
                     GET_LAST_ENTITY_REF()->max_turns = 2;
-                }
+                }*/
                         
                 // init items
 				nullify_all_items(&item_data);
@@ -1622,7 +1648,6 @@ int main(void/*int argc, char* argv[]*/) {
         //cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
         //printf("Cur room: %i\n", zor->cur_room);
 
-        bool fading = false;
 		// check for ents who are dead
         for (int i = 0; i < entity_data.entity_counter; ) {
             Entity* ent = &entity_data.entities[i];
@@ -1632,24 +1657,29 @@ int main(void/*int argc, char* argv[]*/) {
 
             if (ent->hp <= 0) {
                 drop_random_item(ent, &item_data);
+
                 increment_entity_fade(ent);
-                if (ent->faded) {
+
+				bool damage_notif = false;
+				/*for (int i = 0; i < 2; i++) {
+					if (ent->damage_notif_timer[i] > 0.0f) 
+                        damage_notif = true;
+				}*/
+
+                if (ent->faded && !damage_notif) {
                     remove_entity(i, &entity_data);
                 }
                 else {
-					fading = true;
+                    decrement_entity_notif_timer(ent);
 			        i++;
                 }
             }
             else {
-
+				decrement_entity_notif_timer(ent);
 				// ent alive
 				i++;
-
             }
         }
-
-
 
        /* if (player_is_dead) {
             set_gamestate(&gsi, GS_INTRO_DUNGEON);
@@ -1664,14 +1694,6 @@ int main(void/*int argc, char* argv[]*/) {
             Entity* ent = &entity_data.entities[i];
             printf("Entity %i state %i async %i ||| turn %i/%i ||| maxframe %.5f\n", i, ent->state, (int)ent->sync_move, ent->n_turn, ent->max_turns, ent->animation.max_frame_time);
         }*/
-
-        // wait for hurt animation
-        for (int i = 0; i < entity_data.entity_counter; i++) {
-            Entity* ent = &entity_data.entities[i];
-            if (ent->hurt) {
-                increment_entity_hurt_timer(ent);
-            }
-        }
 
         // process entities who are in sync moving
         if (sync_moving_entity_exists(&entity_data)) {
@@ -1762,10 +1784,13 @@ int main(void/*int argc, char* argv[]*/) {
 			update_animation_state(ent);
             update_animation(&ent->animation);
 
+            //decrement_entity_notif_timer(ent);
+
 			scan_items_for_pickup(&item_data, ent);
         }
 
         Vector2 cam_target = { 0 };
+
         if (zor->state == ATTACK_MELEE) {
             cam_target = Vector2Multiply(zor->original_position, (Vector2) { TILE_SIZE, TILE_SIZE });
         }
@@ -1981,7 +2006,6 @@ int main(void/*int argc, char* argv[]*/) {
 						sprintf_s(txt, 2, "%i", e);
 						DrawText(txt, text_pos.x, text_pos.y, 24, WHITE);*/
 
-
 						int y_pos = ent->position.y * TILE_SIZE/* + (TILE_SIZE / 2)*/;
 						//DrawRectangle(x_pos, y_pos, 50, 50, RED);
 						if (!rendered[e] && y_pos < lowest_y) {
@@ -1991,7 +2015,7 @@ int main(void/*int argc, char* argv[]*/) {
 					}
 
 					if (index_to_render != -1) {
-						render_entity(&entity_data.entities[index_to_render]);
+						render_entity(&entity_data.entities[index_to_render], fonts);
 						rendered[index_to_render] = true;
 					}
 				}
