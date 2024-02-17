@@ -83,7 +83,7 @@ Entity create_fly_entity() {
 		.cur_room = -1,
 		.found_target = false,
 
-		.atk = 1, // 9
+		.atk = 9, // 9
 		.max_hp = 11,
 		.hp = 11
 	};

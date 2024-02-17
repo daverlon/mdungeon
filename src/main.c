@@ -1408,6 +1408,7 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
         switch (ent->ent_type) {
         case ENT_ZOR:
             ent->state = SKIP_TURN;
+            //ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
             break;
         case ENT_FLY: {
             ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
@@ -1703,10 +1704,10 @@ int main(void/*int argc, char* argv[]*/) {
                 create_entity_instance(&entity_data, default_ent_zor());
                 zor = GET_LAST_ENTITY_REF();
                 zor->max_turns = 1;
-                zor->atk = 15;
-                for (int i = 0; i < 14; i++) {
+                //zor->atk = ;
+                for (int i = 0; i < 7; i++) {
                     create_entity_instance(&entity_data, create_fly_entity());
-                    GET_LAST_ENTITY_REF()->max_turns = GetRandomValue(1, 2);
+                    //GET_LAST_ENTITY_REF()->max_turns = GetRandomValue(1, 2);
                 }
                 for (int i = 0; i < 2; i++) {
                     create_entity_instance(&entity_data, default_ent_zor());
@@ -2039,7 +2040,7 @@ int main(void/*int argc, char* argv[]*/) {
             EndMode2D();
 
             // render fog texture
-            if (false)
+            //if (false)
             {
                 BeginTextureMode(fog_texture);
                 BeginBlendMode(BLEND_SUBTRACT_COLORS);
@@ -2105,9 +2106,9 @@ int main(void/*int argc, char* argv[]*/) {
                     for (int e = 0; e < entity_data.entity_counter; e++) {
                         Entity* ent = &entity_data.entities[e];
 
-                        /*if (e != 0) {
+                        if (e != 0) {
                             if (!is_entity_visible(zor, ent, &map_data, false)) continue;
-                        }*/
+                        }
 
                         //Vector2 text_pos = position_to_grid_position(ent->position);
 
