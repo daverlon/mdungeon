@@ -112,13 +112,15 @@ void astar_around_ents(MapData* map, EntityData* entity_data, PathList* path_lis
                 if (!closedList[col][row] && nodeDetails[row][col].f < minF) {
                     minF = nodeDetails[row][col].f;
                     current.x = col;
+                    
                     current.y = row;
                 }
             }
         }
 
         if (minF == INT_MAX) {
-            printf("Destination not reachable\n");
+            //printf("Destination not reachable\n");
+            path_list->unreachable = true;
             break;
         }
 
@@ -260,7 +262,8 @@ void astar_through_ents(MapData* map, PathList* pathList, Point src, Point dest,
         }
 
         if (minF == INT_MAX) {
-            printf("Destination not reachable\n");
+            //printf("Destination not reachable\n");
+            pathList->unreachable = true;
             break;
         }
 

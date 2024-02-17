@@ -75,7 +75,7 @@ Entity create_fly_entity() {
 		.can_swap_positions = false,
 
 		.n_turn = 0,
-		.max_turns = 2,
+		.max_turns = 1,
 		.sync_move = false,
 
 		.attack_damage_given = false,

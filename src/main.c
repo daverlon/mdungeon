@@ -12,10 +12,7 @@
 #include "main.h"
 
 #include "dungeon.h"
-#include "dungeon_presets.h"
-
 #include "pathfinding.h"
-
 #include "entity_defs.h"
 
 void print_vector2(Vector2 vec) {
@@ -50,20 +47,6 @@ const int world_width = 32 * 14;
 
 #define FOG_AMOUNT 0.3f
 //#define VIEW_DISTANCE 5.0f
-
-void rotate_smooth(enum Direction target, enum Direction* dir) {
-    int diff = (target - *dir + 8) % 8; // Calculate the shortest difference in direction
-
-    if (diff == 0)
-        return; // If the target is the same as the current direction, no rotation needed
-
-    int steps = (diff <= 4) ? diff : 8 - diff; // Choose the smaller rotation direction
-
-    for (int i = 0; i < steps; i++) {
-        *dir = (*dir + 1) % 8; // Rotate one step clockwise
-        // You can add code here to visualize or animate the rotation
-    }
-}
 
 void print_turn_queue(int turn_queue[], int queue_size) {
     printf("Turn Queue: [");
@@ -1343,6 +1326,11 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         map_data,
         entity_data
     );
+    if (path_list.unreachable) {
+        ent->state = SKIP_TURN;
+        return;
+    }
+    printf("Path len: %i\n", path_list.length);
 
     // If a path is found, move towards the target, otherwise attack if adjacent
     if (path_list.length >= 1) {
@@ -1355,10 +1343,14 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         if (b) {
             PathList alt_path = find_path_around_ents(
                 ent,
-                /*get_active_position(target)*/target->original_position,
+                get_active_position(target)/*target->original_position*/,
                 false,
                 map_data,
                 entity_data);
+            if (alt_path.unreachable) {
+                ent->state = SKIP_TURN;
+                return;
+            }
 
             // found valid alternative path
             if (alt_path.length >= 1) {
@@ -1367,7 +1359,15 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
                     ent->state = SKIP_TURN;
                     return;
                 }
+
                 next_p = alt_path.path[alt_path.length - 1];
+
+                if (any_entity_exists_on_tile(next_p.x, next_p.y, entity_data, ent, NULL) ||
+                    map_data->tiles[next_p.x][next_p.y].type == TILE_WALL) {
+                    ent->state = SKIP_TURN;
+                    return;
+                }
+
                 next_v = point_to_vector2(next_p);
                 movement = Vector2Subtract(next_v, ent->original_position);
                 
@@ -1618,8 +1618,8 @@ int main(void/*int argc, char* argv[]*/) {
 
     GameStateInfo gsi = { GS_INTRO_DUNGEON, false };
 
-    int window_width = 1280;
-    int window_height = 720;
+    int window_width = 1920;
+    int window_height = 1080;
 
     InitWindow(window_width, window_height, "mDungeon");
     //SetWindowState(FLAG_VSYNC_HINT);
@@ -1702,10 +1702,12 @@ int main(void/*int argc, char* argv[]*/) {
                 nullify_all_entities(&entity_data);
                 create_entity_instance(&entity_data, default_ent_zor());
                 zor = GET_LAST_ENTITY_REF();
-                zor->max_turns = 2;
-                zor->atk = 3;
-                for (int i = 0; i < 15; i++)
+                zor->max_turns = 1;
+                zor->atk = 15;
+                for (int i = 0; i < 14; i++) {
                     create_entity_instance(&entity_data, create_fly_entity());
+                    GET_LAST_ENTITY_REF()->max_turns = GetRandomValue(1, 2);
+                }
                 for (int i = 0; i < 2; i++) {
                     create_entity_instance(&entity_data, default_ent_zor());
                    /* GET_LAST_ENTITY_REF()->atk = 3;
@@ -1812,14 +1814,11 @@ int main(void/*int argc, char* argv[]*/) {
                 }
                 else {
                     // if not, rethink turn and process it
-                    //if (ent->state == IDLE || ent->state == SKIP_TURN) {
-                    if (ent->state != MOVE)
+                    if (ent->state == IDLE || ent->state == SKIP_TURN) {
                         entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
-                    //}
-                    
-                    /*if ((ent->state != MOVE && i == cur_turn_entity_index)
-                        || (ent->state == MOVE))*/
-						process_entity_state(ent, &entity_data, &map_data);
+                    }
+
+					process_entity_state(ent, &entity_data, &map_data);
                 }
             }
         }
@@ -1872,10 +1871,9 @@ int main(void/*int argc, char* argv[]*/) {
                     this_ent->prevent_drop = false;
                 }
             }
-            else {
-
-            }
         }
+        // ================================================================== //
+        // new queue implementation
 
         // ================================================================== //
 
@@ -2041,6 +2039,7 @@ int main(void/*int argc, char* argv[]*/) {
             EndMode2D();
 
             // render fog texture
+            if (false)
             {
                 BeginTextureMode(fog_texture);
                 BeginBlendMode(BLEND_SUBTRACT_COLORS);

@@ -31,6 +31,7 @@ typedef struct {
     //Point path[MAX_NODES];
     Point* path;
     int length;
+    bool unreachable;
 } PathList;
 
 //extern void aStarSearch(MapData* map, Point src, Point dest, PathList* pathList, bool cut_corners);
