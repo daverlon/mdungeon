@@ -1330,7 +1330,7 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         ent->state = SKIP_TURN;
         return;
     }
-    printf("Path len: %i\n", path_list.length);
+    //printf("Path len: %i\n", path_list.length);
 
     // If a path is found, move towards the target, otherwise attack if adjacent
     if (path_list.length >= 1) {

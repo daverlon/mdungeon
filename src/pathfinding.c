@@ -222,7 +222,7 @@ void astar_through_ents(MapData* map, PathList* pathList, Point src, Point dest,
         return;
     }
 
-    bool closedList[MAX_COLS][MAX_ROWS];
+    bool closedList[MAX_COLS][MAX_ROWS] = { 0 };
     Node** nodeDetails = (Node**)malloc(map->rows * sizeof(Node*));
     for (int i = 0; i < map->rows; ++i) {
         nodeDetails[i] = (Node*)malloc(map->cols * sizeof(Node));
@@ -249,7 +249,7 @@ void astar_through_ents(MapData* map, PathList* pathList, Point src, Point dest,
 
     while (true) {
         int minF = INT_MAX;
-        Point current;
+        Point current = { 0 };
 
         for (int row = 0; row < map->rows; ++row) {
             for (int col = 0; col < map->cols; ++col) {
