@@ -157,7 +157,7 @@ typedef struct {
 
 #define MOVE_ANIMATION_EXTRA_FRAMES 3
 
-#define MAX_DAMAGE_POPUPS 4
+#define MAX_DAMAGE_POPUPS 32
 
 typedef struct {
     float notif_timer;

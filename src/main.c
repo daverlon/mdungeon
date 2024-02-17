@@ -1299,6 +1299,40 @@ PathList find_path_through_ents(Entity* from_ent, Vector2 to_pos, bool cut_world
     return path_list;
 }
 
+void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, bool crit, EntityData* entity_data) {
+    printf("Damage: %i\n", amount);
+    to->hp -= amount;
+
+    // spin the damaged entity around to look at the other ent
+
+    Vector2 direction = Vector2Clamp(Vector2Subtract(from->original_position, to->original_position),
+        (Vector2) {
+        -1.0f, -1.0f
+    },
+        (Vector2) {
+        1.0f, 1.0f
+    });
+
+    /*if (change_direction && to->state == IDLE && !Vector2Equals(direction, (Vector2){0.0f, 0.0f}))
+        to->direction = vector_to_direction(direction);*/
+
+    from->attack_damage_given = true;
+    to->found_target = true; // for ai
+
+    // shouldnt need more than 2 holders for damage popup
+    for (int i = 0; i < MAX_DAMAGE_POPUPS; i++) {
+        // active timer
+        if (entity_data->damage_popups[i].notif_timer > 0.0f)
+            continue;
+
+        entity_data->damage_popups[i].notif_timer = DAMAGE_NOTIF_DURATION;
+        entity_data->damage_popups[i].amount = amount;
+        entity_data->damage_popups[i].position = to->original_position;
+        entity_data->damage_popups[i].crit = crit;
+        break;
+    }
+}
+
 void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* entity_data, MapData* map_data) {
 
     // calculate next move state
@@ -1347,6 +1381,7 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
                 false,
                 map_data,
                 entity_data);
+
             if (alt_path.unreachable) {
                 ent->state = SKIP_TURN;
                 return;
@@ -1398,6 +1433,97 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
     }
 }
 
+void ai_fantano_teleport_to_same_room_as_player_and_defend(Entity* ent, Entity* player, EntityData* entity_data, MapData* map_data, ItemData* item_data) {
+
+    if (ent->hp < ent->max_hp) ent->hp = ent->max_hp;
+    
+    if (player->hp < 50) {
+        for (int i = 0; i < entity_data->entity_counter; i++) {
+            Entity* e = &entity_data->entities[i];
+            if (e == ent) continue;
+            if (e == player) continue;
+            e->n_turn = e->max_turns;
+
+            apply_damage(e, ent, 999, false, true, entity_data);
+            printf("DEFEND!\n");
+            ent->state = SKIP_TURN;
+        }
+        ent->state = SKIP_TURN;
+        return;
+    }
+
+    if (player->cur_room == -1) {
+        ent->state = SKIP_TURN;
+        return;
+    }
+
+    // player is in a room
+    // pickup random tile in that room
+
+    if (ent->cur_room == player->cur_room) {
+        ent->state = SKIP_TURN;
+
+		Vector2 dir_to_player = Vector2Clamp(
+			Vector2Subtract(get_active_position(player), ent->original_position),
+			(Vector2) {
+			-1.0f, -1.0f
+		},
+			(Vector2) {
+			1.0f, 1.0f
+		});
+		ent->direction = vector_to_direction(dir_to_player);
+
+        return;
+    }
+
+    // fantano not in same room as player
+
+    int i = player->cur_room;
+    Room* rm = &map_data->rooms[i];
+
+    while (true) {
+        // find clear tile to tp onto
+        int col = GetRandomValue(rm->x, rm->x + rm->cols);
+        int row = GetRandomValue(rm->y, rm->y + rm->rows);
+
+        if (any_entity_exists_on_tile(col, row, entity_data, NULL, NULL))
+            continue;
+
+        if (item_exists_on_tile(col, row, item_data, NULL))
+            continue;
+
+        if (map_data->tiles[col][row].type == TILE_WALL)
+            continue;
+
+        // check if block
+        bool block = false;
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                if (map_data->tiles[col + x][row + y].type == TILE_CORRIDOR) {
+                    block = true;
+                    break;
+                }
+            }
+			if (block) break;
+        }
+        if (block) continue;
+
+        set_entity_position(ent, (Vector2) { col, row }, map_data);
+        ent->state = SKIP_TURN;
+        break;
+    }
+
+    Vector2 dir_to_player = Vector2Clamp(
+        Vector2Subtract(get_active_position(player), ent->original_position),
+        (Vector2) {
+        -1.0f, -1.0f
+    },
+        (Vector2) {
+        1.0f, 1.0f
+    });
+    ent->direction = vector_to_direction(dir_to_player);
+}
+
 void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* entity_data, ItemData* item_data, Vector2 grid_mouse_position) {
     // player is usually entity index 0
     if (ent == player) {
@@ -1412,6 +1538,10 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
             break;
         case ENT_FLY: {
             ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
+            break;
+        }
+        case ENT_FANTANO: {
+            ai_fantano_teleport_to_same_room_as_player_and_defend(ent, player, entity_data, map_data, item_data);
             break;
         }
         default:
@@ -1501,40 +1631,6 @@ int get_melee_attack_damage(Entity* ent, int* self_damage, bool* crit) {
     //printf("Damage: %2.5f\n", fdamage);
 
     return damage;
-}
-
-void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, bool crit, EntityData* entity_data) {
-    printf("Damage: %i\n", amount);
-    to->hp -= amount;
-
-    // spin the damaged entity around to look at the other ent
-
-    Vector2 direction = Vector2Clamp(Vector2Subtract(from->original_position, to->original_position),
-        (Vector2) {
-        -1.0f, -1.0f
-    },
-        (Vector2) {
-        1.0f, 1.0f
-    });
-
-    /*if (change_direction && to->state == IDLE && !Vector2Equals(direction, (Vector2){0.0f, 0.0f}))
-        to->direction = vector_to_direction(direction);*/
-
-    from->attack_damage_given = true;
-    to->found_target = true; // for ai
-
-    // shouldnt need more than 2 holders for damage popup
-    for (int i = 0; i < MAX_DAMAGE_POPUPS; i++) {
-        // active timer
-        if (entity_data->damage_popups[i].notif_timer > 0.0f)
-            continue;
-
-        entity_data->damage_popups[i].notif_timer = DAMAGE_NOTIF_DURATION;
-        entity_data->damage_popups[i].amount = amount;
-        entity_data->damage_popups[i].position = to->original_position;
-        entity_data->damage_popups[i].crit = crit;
-        break;
-    }
 }
 
 void process_attack(Entity* ent, EntityData* entity_data) {
@@ -1701,19 +1797,21 @@ int main(void/*int argc, char* argv[]*/) {
 
                 // init the entities
                 nullify_all_entities(&entity_data);
+
                 create_entity_instance(&entity_data, default_ent_zor());
                 zor = GET_LAST_ENTITY_REF();
                 zor->max_turns = 1;
+                printf("Zor cur room: %i\n", zor->cur_room);
+
+                create_entity_instance(&entity_data, create_fantano_entity());
+                fantano = GET_LAST_ENTITY_REF();
+                
                 //zor->atk = ;
                 for (int i = 0; i < 7; i++) {
                     create_entity_instance(&entity_data, create_fly_entity());
                     //GET_LAST_ENTITY_REF()->max_turns = GetRandomValue(1, 2);
                 }
-                for (int i = 0; i < 2; i++) {
-                    create_entity_instance(&entity_data, default_ent_zor());
-                   /* GET_LAST_ENTITY_REF()->atk = 3;
-                    GET_LAST_ENTITY_REF()->max_turns = 2;*/
-                }
+
 
                 // init items
                 nullify_all_items(&item_data);
@@ -1726,6 +1824,9 @@ int main(void/*int argc, char* argv[]*/) {
                     reset_entity_state(ent, false);
                     set_entity_position(ent, find_random_empty_floor_tile(&map_data, &item_data, &entity_data), &map_data);
                 }
+
+                zor->cur_room = get_room_id_at_position((int)zor->original_position.x, (int)zor->original_position.y, &map_data);
+                ai_fantano_teleport_to_same_room_as_player_and_defend(fantano, zor, &entity_data, &map_data, &item_data);
 
                 printf("Init basic dungeon.\n");
                 gsi.init = true;
@@ -1797,8 +1898,10 @@ int main(void/*int argc, char* argv[]*/) {
                 if (!ent->sync_move)
                     continue;
 
-                if (is_entity_dead(ent))
+                if (is_entity_dead(ent)) {
                     ent->state = IDLE;
+                    ent->sync_move = false;
+                }
 
                 if (entity_finished_turn(ent)) {
                     // when an in sync entity has finished their turn
