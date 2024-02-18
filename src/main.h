@@ -78,8 +78,13 @@ enum GameState {
 };
 
 typedef struct {
+    int window_width;
+    int window_height;
     enum GameState game_state;
     bool init;
+    int cur_turn_entity_index;
+    int cur_turn;
+    Vector2 grid_mouse_position;
 } GameStateInfo;
 
 typedef struct {

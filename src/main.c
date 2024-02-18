@@ -41,7 +41,7 @@ const int world_width = 32 * 14;
 
 #define LOAD_DESERT_TILES_TEXTURE() (LoadTexture("res/environment/floor_sand.png"))
 
-#define GET_LAST_ENTITY_REF() (&entity_data.entities[entity_data.entity_counter-1])
+#define GET_LAST_ENTITY_REF() (&entity_data->entities[entity_data->entity_counter-1])
 
 // #define NPC_MAX_INVENTORY_SIZE 4
 
@@ -930,13 +930,13 @@ void get_item_name(enum ItemType it, char* buf) {
     }
 }
 
-void render_ui(int window_width, int window_height, Entity* player, Font* fonts, int cur_turn) {
+void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
 
     {
         char turn_txt[10];
-        sprintf_s(turn_txt, 10, "Turn %i", cur_turn);
+        sprintf_s(turn_txt, 10, "Turn %i", gsi->cur_turn);
 
-        int xx = window_width / 2.0f - MeasureTextEx(fonts[0], turn_txt, 24.0f, 1.0f).x / 2.0f;
+        int xx = gsi->window_width / 2.0f - MeasureTextEx(fonts[0], turn_txt, 24.0f, 1.0f).x / 2.0f;
         int yy = 30;
 
         DrawTextEx(fonts[0], turn_txt, (Vector2) { xx + 2, yy + 2 }, 24.0f, 1.0f, Fade(BLACK, 0.7f));
@@ -953,7 +953,7 @@ void render_ui(int window_width, int window_height, Entity* player, Font* fonts,
         /*int h = (float)window_height * 0.0166666667;*/
         int h = 12;
         //int x = window_width / 2 - w / 2;
-        int x = window_width - w - 30;
+        int x = gsi->window_width - w - 30;
 
         Rectangle hp_bar = (Rectangle){ x, y, w, h };
         int hp_hp = ((float)player->hp / (float)player->max_hp) * hp_bar.width;
@@ -978,7 +978,7 @@ void render_ui(int window_width, int window_height, Entity* player, Font* fonts,
     {
         int w = 210;
         int h = 12;
-        int x = window_width - w - 30;
+        int x = gsi->window_width - w - 30;
 
         int item_i = player->equipped_item_index;
         Item* equipped_item = &player->inventory[item_i];
@@ -1711,40 +1711,191 @@ void process_entity_state(Entity* ent, EntityData* entity_data, MapData* map_dat
     }
 }
 
+void process_entity_turn_queue(GameStateInfo* gsi, EntityData* entity_data, ItemData* item_data, MapData* map_data) {
+
+    Entity* zor = &entity_data->entities[0];
+
+    if (sync_moving_entity_exists(entity_data)) {
+
+        for (int i = 0; i < entity_data->entity_counter; i++) {
+            Entity* ent = &entity_data->entities[i];
+
+            if (!ent->sync_move)
+                continue;
+
+            if (is_entity_dead(ent)) {
+                ent->state = IDLE;
+                ent->sync_move = false;
+            }
+
+            if (entity_finished_turn(ent)) {
+                // when an in sync entity has finished their turn
+                gsi->cur_turn_entity_index++;
+                ent->n_turn = 0;
+                if (gsi->cur_turn_entity_index >= entity_data->entity_counter) {
+                    gsi->cur_turn_entity_index = 0;
+                    gsi->cur_turn++;
+                }
+                ent->sync_move = false;
+
+                ent->prevent_pickup = false;
+                ent->prevent_drop = false;
+            }
+            else {
+                // if not, rethink turn and process it
+                if (ent->state == IDLE || ent->state == SKIP_TURN) {
+                    entity_think(ent, zor, map_data, entity_data, item_data, gsi->grid_mouse_position);
+                }
+
+                process_entity_state(ent, entity_data, map_data);
+            }
+        }
+    }
+    else {
+        // no sync moving entities exist currently
+
+        Entity* this_ent = &entity_data->entities[gsi->cur_turn_entity_index];
+
+        if (this_ent->state != MOVE)
+            entity_think(this_ent, zor, map_data, entity_data, item_data, gsi->grid_mouse_position);
+
+        // check if sync entities should exist for this turn
+        // and log them
+        if (this_ent->state == MOVE) {
+            for (int i = gsi->cur_turn_entity_index + 1; i < entity_data->entity_counter; i++) {
+                Entity* ent = &entity_data->entities[i];
+
+                entity_think(ent, zor, map_data, entity_data, item_data, gsi->grid_mouse_position);
+                if (ent->state != MOVE && ent->state != SKIP_TURN) {
+                    reset_entity_state(ent, false);
+                    break;
+                }
+                this_ent->sync_move = true;
+                ent->sync_move = true;
+            }
+        }
+
+        // if there are none, process individual entity as normal
+        if (!sync_moving_entity_exists(entity_data)) {
+
+            Entity* this_ent = &entity_data->entities[gsi->cur_turn_entity_index];
+
+            if (this_ent->state != MOVE)
+                entity_think(this_ent, zor, map_data, entity_data, item_data, gsi->grid_mouse_position);
+
+            if (is_entity_dead(this_ent))
+                this_ent->state = IDLE;
+
+            process_entity_state(this_ent, entity_data, map_data);
+
+            // entity finished turn?
+            if (entity_finished_turn(this_ent)) {
+                gsi->cur_turn_entity_index++;
+                this_ent->n_turn = 0;
+                if (gsi->cur_turn_entity_index >= entity_data->entity_counter) {
+                    gsi->cur_turn_entity_index = 0;
+                    gsi->cur_turn++;
+                }
+                this_ent->prevent_pickup = false;
+                this_ent->prevent_drop = false;
+            }
+        }
+    }
+}
+
+void run_enchanted_groves_dungeon(GameStateInfo* gsi, EntityData* entity_data, ItemData* item_data, MapData* map_data) {
+    static Entity* zor;
+    static Entity* fantan;
+    
+	if (!gsi->init) {
+		gsi->cur_turn_entity_index = 0;
+        gsi->cur_turn = 0;
+		*map_data = generate_map(DUNGEON_PRESET_BASIC);
+		generate_enchanted_groves_dungeon_texture(map_data, &map_data->dungeon_texture);
+
+		// init the entities
+		nullify_all_entities(entity_data);
+
+		create_entity_instance(entity_data, default_ent_zor());
+
+		zor = GET_LAST_ENTITY_REF();
+		zor->max_turns = 1;
+		printf("Zor cur room: %i\n", zor->cur_room);
+
+		create_entity_instance(entity_data, create_fantano_entity());
+		fantan = GET_LAST_ENTITY_REF();
+
+		//zor->atk = ;
+		for (int i = 0; i < 7; i++) {
+			create_entity_instance(entity_data, create_fly_entity());
+			//GET_LAST_ENTITY_REF()->max_turns = GetRandomValue(1, 2);
+		}
+
+		// init items
+		nullify_all_items(item_data);
+		spawn_items_on_random_tiles((Item) { ITEM_STICK, ITEMCAT_WEAPON },  item_data,  map_data, 5, 8);
+		spawn_items_on_random_tiles((Item) { ITEM_APPLE, ITEMCAT_CONSUMABLE },  item_data,  map_data, 4, 7);
+		spawn_items_on_random_tiles((Item) { ITEM_SPILLEDCUP, ITEMCAT_CONSUMABLE },  item_data,  map_data, 2, 4);
+
+		for (int i = 0; i < entity_data->entity_counter; i++) {
+			Entity* ent = &entity_data->entities[i];
+			reset_entity_state(ent, false);
+			set_entity_position(ent, find_random_empty_floor_tile(map_data, item_data, entity_data), map_data);
+		}
+
+		zor->cur_room = get_room_id_at_position((int)zor->original_position.x, (int)zor->original_position.y, map_data);
+		ai_fantano_teleport_to_same_room_as_player_and_defend(fantan, zor, entity_data, map_data, item_data);
+
+		printf("Init basic dungeon.\n");
+
+		gsi->init = true;
+	}
+
+	if (IsKeyPressed(KEY_R)) {
+		gsi->cur_turn = 0;
+		set_gamestate(gsi, GS_INTRO_DUNGEON);
+		entity_data->entity_counter = 0;
+	}
+
+    process_entity_turn_queue(gsi, entity_data, item_data, map_data);
+}
+
 int main(void/*int argc, char* argv[]*/) {
 
-    GameStateInfo gsi = { GS_INTRO_DUNGEON, false };
+	GameStateInfo gsi = { 
+        .window_width = 1920,
+        .window_height = 1080,
+        .game_state = GS_INTRO_DUNGEON,
+	    .init = false,
+	    .cur_turn_entity_index = 0,
+		.cur_turn = 0,
+		.grid_mouse_position = { 0 }
+	};
 
-    int window_width = 1920;
-    int window_height = 1080;
-
-    InitWindow(window_width, window_height, "mDungeon");
+  
+    InitWindow(gsi.window_width, gsi.window_height, "mDungeon");
     //SetWindowState(FLAG_VSYNC_HINT);
     SetWindowState(FLAG_WINDOW_RESIZABLE);
     //SetWindowState(FLAG_WINDOW_MAXIMIZED);
-    //SetTargetFPS(30);
     SetTargetFPS(144);
 
-    SetRandomSeed(545);
+    SetRandomSeed(100);
 
-    Font fonts[1] = { 0 };
-    fonts[0] = LoadFontEx("res/fonts/YanoneKaffeesatz-Regular.ttf", 144, NULL, NULL);
+    Font fonts[1] = { 
+        LoadFontEx("res/fonts/YanoneKaffeesatz-Regular.ttf", 144, NULL, NULL) 
+    };
     SetTextureFilter(fonts[0].texture, TEXTURE_FILTER_POINT);
 
     Camera2D camera = { 0 };
     {
-        camera.offset = (Vector2){ window_width / 2, window_height / 2 };
+        camera.offset = (Vector2){ gsi.window_width / 2, gsi.window_height / 2 };
         camera.target = (Vector2){ 0.0f, 0.0f };
         camera.rotation = 0.0f;
         camera.zoom = 1.0f;
     }
-    Vector2 grid_mouse_position = { 0 };
 
     EntityData entity_data = (EntityData){ 0 };
-    Entity* zor = { 0 };
-    Entity* fantano = { 0 };
-    Entity* cyhar = { 0 };
-
+    nullify_all_entities(&entity_data);
 
     ItemData item_data = (ItemData){ .items = { 0 }, .item_counter = 0 };
     nullify_all_items(&item_data);
@@ -1754,8 +1905,8 @@ int main(void/*int argc, char* argv[]*/) {
     Texture2D texture_item_stick = LOAD_STICK_TEXTURE();
     Texture2D texture_item_apple = LOAD_APPLE_TEXTURE();
 
-    RenderTexture2D dungeon_texture = { 0 };
-    RenderTexture2D fog_texture = LoadRenderTexture(window_width, window_height);
+    //RenderTexture2D dungeon_texture = { 0 };
+    RenderTexture2D fog_texture = LoadRenderTexture(gsi.window_width, gsi.window_height);
 
     MapData map_data = { 0 };
 
@@ -1767,12 +1918,12 @@ int main(void/*int argc, char* argv[]*/) {
     while (!WindowShouldClose()) {
 
         if (IsWindowResized()) {
-            window_width = GetScreenWidth();
-            window_height = GetScreenHeight();
-            camera.offset = (Vector2){ window_width / 2.0f, window_height / 2.0f };
+            gsi.window_width = GetScreenWidth();
+            gsi.window_height = GetScreenHeight();
+            camera.offset = (Vector2){ gsi.window_width / 2.0f, gsi.window_height / 2.0f };
 
             UnloadRenderTexture(fog_texture);
-            fog_texture = LoadRenderTexture(window_width, window_height);
+            fog_texture = LoadRenderTexture(gsi.window_width, gsi.window_height);
         }
 
         // handle events
@@ -1786,57 +1937,37 @@ int main(void/*int argc, char* argv[]*/) {
             // printf("Scroll: %2.0f\n", camera.zoom);
         }
 
+        
+        // check for ents who are dead
+        for (int i = 0; i < entity_data.entity_counter; ) {
+            Entity* ent = &entity_data.entities[i];
+
+            Vector2 act = get_active_position(ent);
+            ent->cur_room = get_room_id_at_position(act.x, act.y, &map_data);
+
+            if (ent->hp <= 0) {
+                drop_random_item(ent, &item_data);
+                increment_entity_fade(ent);
+
+                if (ent->faded && i != 0) {
+                    remove_entity(i, &entity_data);
+                }
+                else {
+                    i++;
+                }
+            }
+            else {
+                // ent alive
+                i++;
+            }
+        }
+
+
         // update game logic
         switch (gsi.game_state) {
         case GS_INTRO_DUNGEON: {
-            if (!gsi.init) {
-
-                cur_turn_entity_index = 0;
-                map_data = generate_map(DUNGEON_PRESET_BASIC);
-                generate_enchanted_groves_dungeon_texture(&map_data, &dungeon_texture);
-
-                // init the entities
-                nullify_all_entities(&entity_data);
-
-                create_entity_instance(&entity_data, default_ent_zor());
-                zor = GET_LAST_ENTITY_REF();
-                zor->max_turns = 1;
-                printf("Zor cur room: %i\n", zor->cur_room);
-
-                create_entity_instance(&entity_data, create_fantano_entity());
-                fantano = GET_LAST_ENTITY_REF();
-                
-                //zor->atk = ;
-                for (int i = 0; i < 7; i++) {
-                    create_entity_instance(&entity_data, create_fly_entity());
-                    //GET_LAST_ENTITY_REF()->max_turns = GetRandomValue(1, 2);
-                }
-
-
-                // init items
-                nullify_all_items(&item_data);
-                spawn_items_on_random_tiles((Item) { ITEM_STICK, ITEMCAT_WEAPON }, & item_data, & map_data, 5, 8);
-                spawn_items_on_random_tiles((Item) { ITEM_APPLE, ITEMCAT_CONSUMABLE }, & item_data, & map_data, 4, 7);
-                spawn_items_on_random_tiles((Item) { ITEM_SPILLEDCUP, ITEMCAT_CONSUMABLE }, & item_data, & map_data, 2, 4);
-
-                for (int i = 0; i < entity_data.entity_counter; i++) {
-                    Entity* ent = &entity_data.entities[i];
-                    reset_entity_state(ent, false);
-                    set_entity_position(ent, find_random_empty_floor_tile(&map_data, &item_data, &entity_data), &map_data);
-                }
-
-                zor->cur_room = get_room_id_at_position((int)zor->original_position.x, (int)zor->original_position.y, &map_data);
-                ai_fantano_teleport_to_same_room_as_player_and_defend(fantano, zor, &entity_data, &map_data, &item_data);
-
-                printf("Init basic dungeon.\n");
-                gsi.init = true;
-            }
-            if (IsKeyPressed(KEY_R)) {
-                cur_turn = 0;
-                set_gamestate(&gsi, GS_INTRO_DUNGEON);
-                entity_data.entity_counter = 0;
-            }
-            break;
+            run_enchanted_groves_dungeon(&gsi, &entity_data, &item_data, &map_data);
+		   break;
         }
         default: {
             printf("Gamestate: %i\n", gsi.game_state);
@@ -1850,36 +1981,6 @@ int main(void/*int argc, char* argv[]*/) {
         //cur_room = get_room_id_at_position(zor->position.x, zor->position.y, &map_data);
         //printf("Cur room: %i\n", zor->cur_room);
 
-        // check for ents who are dead
-        for (int i = 0; i < entity_data.entity_counter; ) {
-            Entity* ent = &entity_data.entities[i];
-
-            Vector2 act = get_active_position(ent);
-            ent->cur_room = get_room_id_at_position(act.x, act.y, &map_data);
-
-            if (ent->hp <= 0) {
-                drop_random_item(ent, &item_data);
-
-                increment_entity_fade(ent);
-
-                if (ent->faded) {
-                    remove_entity(i, &entity_data);
-                }
-                else {
-                    i++;
-                }
-            }
-            else {
-                // ent alive
-                i++;
-            }
-        }
-
-        /* if (player_is_dead) {
-             set_gamestate(&gsi, GS_INTRO_DUNGEON);
-             continue;
-         }*/
-
          // ================================================================== //
 
          // debug statements
@@ -1889,110 +1990,17 @@ int main(void/*int argc, char* argv[]*/) {
              printf("Entity %i state %i async %i ||| turn %i/%i ||| maxframe %.5f\n", i, ent->state, (int)ent->sync_move, ent->n_turn, ent->max_turns, ent->animation.max_frame_time);
          }*/
 
-         // process entities who are in sync moving
-        if (sync_moving_entity_exists(&entity_data)) {
-
-            for (int i = 0; i < entity_data.entity_counter; i++) {
-                Entity* ent = &entity_data.entities[i];
-
-                if (!ent->sync_move)
-                    continue;
-
-                if (is_entity_dead(ent)) {
-                    ent->state = IDLE;
-                    ent->sync_move = false;
-                }
-
-                if (entity_finished_turn(ent)) {
-                    // when an in sync entity has finished their turn
-                    cur_turn_entity_index++;
-                    ent->n_turn = 0;
-                    if (cur_turn_entity_index >= entity_data.entity_counter) {
-                        cur_turn_entity_index = 0;
-                        cur_turn++;
-                    }
-                    ent->sync_move = false;
-
-                    ent->prevent_pickup = false;
-                    ent->prevent_drop = false;
-                }
-                else {
-                    // if not, rethink turn and process it
-                    if (ent->state == IDLE || ent->state == SKIP_TURN) {
-                        entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
-                    }
-
-					process_entity_state(ent, &entity_data, &map_data);
-                }
-            }
-        }
-        else {
-            // no sync moving entities exist currently
-
-            Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
-
-			if (this_ent->state != MOVE)
-				entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
-
-            // check if sync entities should exist for this turn
-            // and log them
-            if (this_ent->state == MOVE) {
-                for (int i = cur_turn_entity_index + 1; i < entity_data.entity_counter; i++) {
-                    Entity* ent = &entity_data.entities[i];
-
-                    entity_think(ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
-                    if (ent->state != MOVE && ent->state != SKIP_TURN) {
-                        reset_entity_state(ent, false);
-                        break;
-                    }
-                    this_ent->sync_move = true;
-                    ent->sync_move = true;
-                }
-            }
-
-            // if there are none, process individual entity as normal
-            if (!sync_moving_entity_exists(&entity_data)) {
-
-                Entity* this_ent = &entity_data.entities[cur_turn_entity_index];
-
-				if (this_ent->state != MOVE)
-					entity_think(this_ent, zor, &map_data, &entity_data, &item_data, grid_mouse_position);
-
-                if (is_entity_dead(this_ent))
-                    this_ent->state = IDLE;
-
-                process_entity_state(this_ent, &entity_data, &map_data);
-
-                // entity finished turn?
-                if (entity_finished_turn(this_ent)) {
-                    cur_turn_entity_index++;
-                    this_ent->n_turn = 0;
-                    if (cur_turn_entity_index >= entity_data.entity_counter) {
-                        cur_turn_entity_index = 0;
-                        cur_turn++;
-                    }
-                    this_ent->prevent_pickup = false;
-                    this_ent->prevent_drop = false;
-                }
-            }
-        }
-        // ================================================================== //
-        // new queue implementation
-
-        // ================================================================== //
+        Entity* zor = &entity_data.entities[0];
 
         for (int i = 0; i < entity_data.entity_counter; i++) {
             Entity* ent = &entity_data.entities[i];
             if (is_entity_dead(ent)) continue;
 
-
             update_animation_state(ent);
             update_animation(&ent->animation);
 
-
             //scan_items_for_pickup(&item_data, ent);
         }
-
 
         Vector2 cam_target = { 0 };
 
@@ -2050,7 +2058,6 @@ int main(void/*int argc, char* argv[]*/) {
             continue;
         }
 
-
         decrement_entity_notif_timer(&entity_data);
 
         // do rendering
@@ -2058,27 +2065,27 @@ int main(void/*int argc, char* argv[]*/) {
         {
             ClearBackground(BLACK);
 
-            DrawLine(window_width / 2, 0, window_width / 2, window_height, GREEN_SEMI_TRANSPARENT);
-            DrawLine(0, window_height / 2, window_width, window_height / 2, GREEN_SEMI_TRANSPARENT);
+            DrawLine(gsi.window_width / 2, 0, gsi.window_width / 2, gsi.window_height, GREEN_SEMI_TRANSPARENT);
+            DrawLine(0, gsi.window_height / 2, gsi.window_width, gsi.window_height / 2, GREEN_SEMI_TRANSPARENT);
 
             BeginMode2D(camera);
             {
                 // render map
-                DrawTexture(dungeon_texture.texture, 0, 0, WHITE);
+                DrawTexture(map_data.dungeon_texture.texture, 0, 0, WHITE);
                 for (int row = 0; row < map_data.rows; row++) {
                     for (int col = 0; col < map_data.cols; col++) {
                         Color clr = LIGHTGREEN;
                         if (IsKeyDown(KEY_SPACE) && map_data.tiles[col][row].type != TILE_WALL) {
                             Color clr = BLACK_SEMI_TRANSPARENT;
 
-                            grid_mouse_position = GetMousePosition();
-                            grid_mouse_position = GetScreenToWorld2D(grid_mouse_position, camera);
-                            grid_mouse_position = Vector2Divide(grid_mouse_position, (Vector2) { TILE_SIZE, TILE_SIZE });
-                            grid_mouse_position.x = floorf(grid_mouse_position.x);
-                            grid_mouse_position.y = floorf(grid_mouse_position.y);
+                            gsi.grid_mouse_position = GetMousePosition();
+                            gsi.grid_mouse_position = GetScreenToWorld2D(gsi.grid_mouse_position, camera);
+                            gsi.grid_mouse_position = Vector2Divide(gsi.grid_mouse_position, (Vector2) { TILE_SIZE, TILE_SIZE });
+                            gsi.grid_mouse_position.x = floorf(gsi.grid_mouse_position.x);
+                            gsi.grid_mouse_position.y = floorf(gsi.grid_mouse_position.y);
                             //print_vector2(grid_mouse_position);
 
-                            if (grid_mouse_position.x == col && grid_mouse_position.y == row) {
+                            if (gsi.grid_mouse_position.x == col && gsi.grid_mouse_position.y == row) {
                                 clr = YELLOW;
                             }
 
@@ -2087,7 +2094,7 @@ int main(void/*int argc, char* argv[]*/) {
                             }
 
                             Vector2 mouse_grid_pos_dir = Vector2Clamp(
-                                Vector2Subtract(grid_mouse_position, zor->original_position),
+                                Vector2Subtract(gsi.grid_mouse_position, zor->original_position),
                                 (Vector2) {
                                 -1.0f, -1.0f
                             },
@@ -2096,7 +2103,7 @@ int main(void/*int argc, char* argv[]*/) {
                             });
 
                             if (IsMouseButtonReleased(MOUSE_BUTTON_RIGHT))
-								print_vector2(grid_mouse_position);
+								print_vector2(gsi.grid_mouse_position);
 
                             if (Vector2Equals(Vector2Add(zor->original_position, mouse_grid_pos_dir), (Vector2) { col, row })) {
                                 clr = RED;
@@ -2171,7 +2178,7 @@ int main(void/*int argc, char* argv[]*/) {
                     tl.y += delta.y;
 
                     //DrawRectangle(tl.x, window_height - tl.y, delta.x, delta.y, Fade(BLACK, 0.5f));
-                    Rectangle light = (Rectangle){ tl.x, window_height - tl.y, delta.x, delta.y };
+                    Rectangle light = (Rectangle){ tl.x, gsi.window_height - tl.y, delta.x, delta.y };
                     DrawRectangleRounded(light, 0.3f, 0.0f, Fade(BLACK, FOG_AMOUNT));
                 }
                 else {
@@ -2238,13 +2245,13 @@ int main(void/*int argc, char* argv[]*/) {
 
             DrawFPS(10, 5);
             render_player_inventory(zor);
-            render_ui(window_width, window_height, zor, fonts, cur_turn);
+            render_ui(&gsi, zor, fonts, cur_turn);
 
         } // end rendering
         EndDrawing();
     }
 
-    UnloadRenderTexture(dungeon_texture);
+    UnloadRenderTexture(map_data.dungeon_texture);
     UnloadRenderTexture(fog_texture);
 
     // delete item textures
