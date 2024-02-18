@@ -932,15 +932,20 @@ void get_item_name(enum ItemType it, char* buf) {
 
 void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
 
+    float scaling = 1280;
+    scaling = gsi->window_width / scaling;
+
+    float font_size = 24.0f * scaling;
+
     {
         char turn_txt[10];
         sprintf_s(turn_txt, 10, "Turn %i", gsi->cur_turn);
 
-        int xx = gsi->window_width / 2.0f - MeasureTextEx(fonts[0], turn_txt, 24.0f, 1.0f).x / 2.0f;
+        int xx = gsi->window_width / 2.0f - MeasureTextEx(fonts[0], turn_txt, font_size, 1.0f).x / 2.0f;
         int yy = 30;
 
-        DrawTextEx(fonts[0], turn_txt, (Vector2) { xx + 2, yy + 2 }, 24.0f, 1.0f, Fade(BLACK, 0.7f));
-        DrawTextEx(fonts[0], turn_txt, (Vector2) { xx, yy }, 24.0f, 1.0f, WHITE);
+        DrawTextEx(fonts[0], turn_txt, (Vector2) { xx + 2, yy + 2 }, font_size, 1.0f, Fade(BLACK, 0.7f));
+        DrawTextEx(fonts[0], turn_txt, (Vector2) { xx, yy }, font_size, 1.0f, WHITE);
     }
 
     int y = 30;
@@ -949,9 +954,9 @@ void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
 
     // hp bar
     {
-        int w = 300;
+        int w = 300 * scaling;
         /*int h = (float)window_height * 0.0166666667;*/
-        int h = 12;
+        int h = 12 * scaling;
         //int x = window_width / 2 - w / 2;
         int x = gsi->window_width - w - 30;
 
@@ -959,8 +964,8 @@ void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
         int hp_hp = ((float)player->hp / (float)player->max_hp) * hp_bar.width;
 
         //DrawRectangleGradientV(x, y, w, h, RED, (Color){64, 0, 0, 255});
-        DrawRectangleGradientV(x, y, w, h, (Color) { 64, 0, 0, 255 }, RED);
-        DrawRectangleGradientV(x, y, hp_hp, h, GREEN, DARKGREEN);
+        DrawRectangleGradientV(x+1, y, w-2, h, (Color) { 64, 0, 0, 255 }, RED);
+        DrawRectangleGradientV(x+1, y, hp_hp-2, h, GREEN, DARKGREEN);
         DrawRectangleRoundedLines(hp_bar, 0.5f, 1.0f, 2, BLACK);
 
         char txt[10];
@@ -968,16 +973,16 @@ void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
 
         int yy = y - 1;
         int xx = x + 2;
-        DrawTextEx(fonts[0], txt, (Vector2) { xx + 2, yy + 2 }, 24.0f, 1.0f, Fade(BLACK, 0.7f));
-        DrawTextEx(fonts[0], txt, (Vector2) { xx, yy }, 24.0f, 1.0f, WHITE);
+        DrawTextEx(fonts[0], txt, (Vector2) { xx + 2, yy + 2 }, font_size, 1.0f, Fade(BLACK, 0.7f));
+        DrawTextEx(fonts[0], txt, (Vector2) { xx, yy }, font_size ,1.0f, WHITE);
     }
 
-    y += 25;
+    y += 25 * scaling;
 
     // item hp bar
     {
-        int w = 210;
-        int h = 12;
+        int w = 210 * scaling;
+        int h = 12 * scaling;
         int x = gsi->window_width - w - 30;
 
         int item_i = player->equipped_item_index;
@@ -988,52 +993,64 @@ void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
 
         //DrawRectangleGradientV(x, y, w, h, GRAY, (Color){30, 30, 30, 255});
         DrawRectangleGradientV(x, y, w, h, (Color) { 30, 30, 30, 255 }, GRAY);
-        DrawRectangleGradientV(x, y, hp_hp, h, BLUE, (Color) { 0, 0, 202, 255 });
+        //DrawRectangleGradientV(x, y, hp_hp, h, BLUE, (Color) { 0, 0, 202, 255 });
+        DrawRectangleGradientV(x, y, hp_hp, h, ORANGE, (Color) { 255 - 90, 161 - 90, 0, 255 });
         DrawRectangleRoundedLines(hp_bar, 0.5f, 1.0f, 2, BLACK);
 
         char txt[16];
         get_item_name(player->inventory[item_i].type, txt);
 
-        Vector2 fs = MeasureTextEx(fonts[0], txt, 24.0f, 1.0f);
+        Vector2 fs = MeasureTextEx(fonts[0], txt, font_size, 1.0f);
         //x = window_width - 30 - fs.x - 3;
 
-        DrawTextEx(fonts[0], txt, (Vector2) { x + 4, y + 2 }, 24.0f, 1.0f, Fade(BLACK, 0.7f));
-        DrawTextEx(fonts[0], txt, (Vector2) { x + 2, y }, 24.0f, 1.0f, WHITE);
+        DrawTextEx(fonts[0], txt, (Vector2) { x + 4, y + 2 }, font_size, 1.0f, Fade(BLACK, 0.7f));
+        DrawTextEx(fonts[0], txt, (Vector2) { x + 2, y }, font_size, 1.0f, WHITE);
 
     }
 
-}
+    // area name
+    {
+        int xx = 30;
+        int yy = 30;
 
-void render_player_inventory(Entity* player) {
-    // for debug/development purposes
-    const int c = player->inventory_item_count;
-    const int text_y_offset = 100;
-    const int gap = 30;
-    DrawText("Inventory", 10, text_y_offset - gap, 24, WHITE);
-    for (int i = 0; i < c; i++) {
-        switch (player->inventory[i].type) {
-        default: {
-            printf("Default\n");
-            break;
+        DrawTextEx(fonts[0], gsi->area_name, (Vector2) { xx + 4, yy + 2 }, font_size, 1.0f, Fade(BLACK, 0.7f));
+        DrawTextEx(fonts[0], gsi->area_name, (Vector2) { xx + 2, yy }, font_size, 1.0f, WHITE);
+   }
+
+    // inventory
+    {
+        const int gap = 30 * scaling;
+        const int c = player->inventory_item_count;
+        int size = 30 * scaling;
+        int xx = 30;
+
+        for (int i = 0; i < c; i++) {
+            switch (player->inventory[i].type) {
+            default: {
+                printf("Default\n");
+                break;
+            }
+            case ITEM_NOTHING: {
+                printf("Error: ITEM_NOTHING present in player inventory.");
+                break;
+            }
+            case ITEM_SPILLEDCUP: {
+                DrawTextEx(fonts[0], "Spilled Cup", (Vector2) { xx, y + (i * gap) }, font_size, 1.0f, WHITE);
+                break;
+            }
+            case ITEM_STICK: {
+                DrawTextEx(fonts[0], "Stick", (Vector2) { xx, y + (i * gap) }, font_size, 1.0f, WHITE);
+                break;
+            }
+            case ITEM_APPLE: {
+                DrawTextEx(fonts[0], "Apple", (Vector2) { xx, y + (i * gap) }, font_size, 1.0f, WHITE);
+                break;
+            }
+            }
         }
-        case ITEM_NOTHING: {
-            printf("Error: ITEM_NOTHING present in player inventory.");
-            break;
-        }
-        case ITEM_SPILLEDCUP: {
-            DrawText("SpilledCup", 10, text_y_offset + (i * gap), 24, WHITE);
-            break;
-        }
-        case ITEM_STICK: {
-            DrawText("Stick", 10, text_y_offset + (i * gap), 24, WHITE);
-            break;
-        }
-        case ITEM_APPLE: {
-            DrawText("Apple", 10, text_y_offset + (i * gap), 24, WHITE);
-            break;
-        }
-        }
+
     }
+
 }
 
 void set_gamestate(GameStateInfo* gsi, enum GameState state) {
@@ -1435,6 +1452,16 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
 
 void ai_fantano_teleport_to_same_room_as_player_and_defend(Entity* ent, Entity* player, EntityData* entity_data, MapData* map_data, ItemData* item_data) {
 
+	Vector2 dir_to_player = Vector2Clamp(
+		Vector2Subtract(get_active_position(player), ent->original_position),
+		(Vector2) {
+		-1.0f, -1.0f
+	},
+		(Vector2) {
+		1.0f, 1.0f
+	});
+	ent->direction = vector_to_direction(dir_to_player);
+
     if (ent->hp < ent->max_hp) ent->hp = ent->max_hp;
     
     if (player->hp < 50) {
@@ -1449,7 +1476,7 @@ void ai_fantano_teleport_to_same_room_as_player_and_defend(Entity* ent, Entity* 
             ent->state = SKIP_TURN;
         }
         ent->state = SKIP_TURN;
-        return;
+        //return;
     }
 
     if (player->cur_room == -1) {
@@ -1459,24 +1486,12 @@ void ai_fantano_teleport_to_same_room_as_player_and_defend(Entity* ent, Entity* 
 
     // player is in a room
     // pickup random tile in that room
+    // fantano not in same room as player
 
-    if (ent->cur_room == player->cur_room) {
+    if (player->cur_room == ent->cur_room) {
         ent->state = SKIP_TURN;
-
-		Vector2 dir_to_player = Vector2Clamp(
-			Vector2Subtract(get_active_position(player), ent->original_position),
-			(Vector2) {
-			-1.0f, -1.0f
-		},
-			(Vector2) {
-			1.0f, 1.0f
-		});
-		ent->direction = vector_to_direction(dir_to_player);
-
         return;
     }
-
-    // fantano not in same room as player
 
     int i = player->cur_room;
     Room* rm = &map_data->rooms[i];
@@ -1512,16 +1527,6 @@ void ai_fantano_teleport_to_same_room_as_player_and_defend(Entity* ent, Entity* 
         ent->state = SKIP_TURN;
         break;
     }
-
-    Vector2 dir_to_player = Vector2Clamp(
-        Vector2Subtract(get_active_position(player), ent->original_position),
-        (Vector2) {
-        -1.0f, -1.0f
-    },
-        (Vector2) {
-        1.0f, 1.0f
-    });
-    ent->direction = vector_to_direction(dir_to_player);
 }
 
 void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* entity_data, ItemData* item_data, Vector2 grid_mouse_position) {
@@ -1807,9 +1812,11 @@ void run_enchanted_groves_dungeon(GameStateInfo* gsi, EntityData* entity_data, I
     static Entity* zor;
     static Entity* fantan;
     
+    // in it
 	if (!gsi->init) {
 		gsi->cur_turn_entity_index = 0;
         gsi->cur_turn = 0;
+        sprintf_s(gsi->area_name, 17, "Enchanted Groves");
 		*map_data = generate_map(DUNGEON_PRESET_BASIC);
 		generate_enchanted_groves_dungeon_texture(map_data, &map_data->dungeon_texture);
 
@@ -1891,7 +1898,7 @@ int main(void/*int argc, char* argv[]*/) {
         camera.offset = (Vector2){ gsi.window_width / 2, gsi.window_height / 2 };
         camera.target = (Vector2){ 0.0f, 0.0f };
         camera.rotation = 0.0f;
-        camera.zoom = 1.0f;
+        camera.zoom = 1.3f;
     }
 
     EntityData entity_data = (EntityData){ 0 };
@@ -1917,6 +1924,7 @@ int main(void/*int argc, char* argv[]*/) {
     // main loop
     while (!WindowShouldClose()) {
 
+        int prev_width = gsi.window_width;
         if (IsWindowResized()) {
             gsi.window_width = GetScreenWidth();
             gsi.window_height = GetScreenHeight();
@@ -1924,6 +1932,8 @@ int main(void/*int argc, char* argv[]*/) {
 
             UnloadRenderTexture(fog_texture);
             fog_texture = LoadRenderTexture(gsi.window_width, gsi.window_height);
+
+            camera.zoom *= ((float)gsi.window_width / (float)prev_width);
         }
 
         // handle events
@@ -1937,7 +1947,6 @@ int main(void/*int argc, char* argv[]*/) {
             // printf("Scroll: %2.0f\n", camera.zoom);
         }
 
-        
         // check for ents who are dead
         for (int i = 0; i < entity_data.entity_counter; ) {
             Entity* ent = &entity_data.entities[i];
@@ -1961,7 +1970,6 @@ int main(void/*int argc, char* argv[]*/) {
                 i++;
             }
         }
-
 
         // update game logic
         switch (gsi.game_state) {
@@ -2244,7 +2252,6 @@ int main(void/*int argc, char* argv[]*/) {
 
 
             DrawFPS(10, 5);
-            render_player_inventory(zor);
             render_ui(&gsi, zor, fonts, cur_turn);
 
         } // end rendering

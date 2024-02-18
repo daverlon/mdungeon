@@ -101,6 +101,8 @@ typedef struct {
     Room rooms[MAX_ROOMS];
 
     float view_distance;
+
+    RenderTexture2D dungeon_texture;
 } MapData;
 
 extern MapData generate_map(MapGenerationConfig config);

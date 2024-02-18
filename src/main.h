@@ -85,6 +85,7 @@ typedef struct {
     int cur_turn_entity_index;
     int cur_turn;
     Vector2 grid_mouse_position;
+    char area_name[32];
 } GameStateInfo;
 
 typedef struct {
