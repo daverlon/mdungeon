@@ -7,6 +7,7 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 // #include <string.h>
 
 #include "main.h"
@@ -132,6 +133,7 @@ enum Direction vector_to_direction(Vector2 vector) {
     else if (vector.x == -1.0f && vector.y == 1.0f) {
         return DOWNLEFT;
     }
+    return DOWN;
 }
 
 void set_entity_position(Entity* ent, Vector2 pos, MapData* map_data) {
@@ -362,6 +364,7 @@ void reset_entity_state(Entity* ent, bool use_turn) {
         ent->n_turn++;
         ent->attack_damage_given = false;
     }
+    ent->is_swapping = false;
 }
 
 void move_entity_forward(Entity* ent, MapData* map_data) {
@@ -517,25 +520,15 @@ void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, Ite
             //printf("Tried to walk on tile with entity\n");
             if (swapi != -1)
                 if (!entity_data->entities[swapi].can_swap_positions) {
-                    /*ent->should_move = false;
-                    ent->state = IDLE;*/
-                    //ent->state = IDLE;
-                    //should_move = false;
                     reset_entity_state(ent, false);
                     return;
+                } 
+                else {
+                    entity_data->entities[swapi].is_swapping = true;
+                    ent->state = MOVE;
+                    return;
                 }
-            //else if (entity_data->entities[swapi].can_swap_positions) {
-            //    swap_entity_positions(en, &entity_data->entities[swapi]);
-            //   /* ent->should_move = false;
-            //    ent->state = IDLE;*/
-            //    reset_entity_state(en, true);
-            //    reset_entity_state(&entity_data->entities[swapi], true);
-            //    return;
-            //}
-           /* else if (&entity_data->entities[swapi]) {
-                swap_entity_positions(en, &entity_data->entities[swapi]);
-                return;
-            }*/
+
         }
 
         switch (map_data->tiles[i_targ_x][i_targ_y].type) {
@@ -916,16 +909,16 @@ void scan_items_for_pickup(ItemData* item_data, Entity* entity) {
 void get_item_name(enum ItemType it, char* buf) {
     switch (it) {
     default:
-        sprintf_s(buf, 9, "empty");
+        snprintf(buf, 9, "empty");
         break;
     case ITEM_APPLE:
-        sprintf_s(buf, 6, "apple");
+        snprintf(buf, 6, "apple");
         break;
     case ITEM_STICK:
-        sprintf_s(buf, 6, "stick");
+        snprintf(buf, 6, "stick");
         break;
     case ITEM_SPILLEDCUP:
-        sprintf_s(buf, 12, "spilled cup");
+        snprintf(buf, 12, "spilled cup");
         break;
     }
 }
@@ -939,7 +932,7 @@ void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
 
     {
         char turn_txt[10];
-        sprintf_s(turn_txt, 10, "Turn %i", gsi->cur_turn);
+        snprintf(turn_txt, 10, "Turn %i", gsi->cur_turn);
 
         int xx = gsi->window_width / 2.0f - MeasureTextEx(fonts[0], turn_txt, font_size, 1.0f).x / 2.0f;
         int yy = 30;
@@ -969,7 +962,7 @@ void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
         DrawRectangleRoundedLines(hp_bar, 0.5f, 1.0f, 2, BLACK);
 
         char txt[10];
-        sprintf_s(txt, 10, "%i/%i", player->hp, player->max_hp);
+        snprintf(txt, 10, "%i/%i", player->hp, player->max_hp);
 
         int yy = y - 1;
         int xx = x + 2;
@@ -1542,11 +1535,19 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
             //ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
             break;
         case ENT_FLY: {
-            ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
+            // ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
+            ent->state = SKIP_TURN;
             break;
         }
         case ENT_FANTANO: {
-            ai_fantano_teleport_to_same_room_as_player_and_defend(ent, player, entity_data, map_data, item_data);
+            if (ent->is_swapping) {
+                // ent->sync_move = true;
+                ent->state = MOVE;
+            }
+            else {
+                ent->state = SKIP_TURN;
+            }
+            // ai_fantano_teleport_to_same_room_as_player_and_defend(ent, player, entity_data, map_data, item_data);
             break;
         }
         default:
@@ -1816,7 +1817,7 @@ void run_enchanted_groves_dungeon(GameStateInfo* gsi, EntityData* entity_data, I
 	if (!gsi->init) {
 		gsi->cur_turn_entity_index = 0;
         gsi->cur_turn = 0;
-        sprintf_s(gsi->area_name, 17, "Enchanted Groves");
+        snprintf(gsi->area_name, 17, "Enchanted Groves");
 		*map_data = generate_map(DUNGEON_PRESET_BASIC);
 		generate_enchanted_groves_dungeon_texture(map_data, &map_data->dungeon_texture);
 
@@ -2252,7 +2253,7 @@ int main(void/*int argc, char* argv[]*/) {
 
 
             DrawFPS(10, 5);
-            render_ui(&gsi, zor, fonts, cur_turn);
+            render_ui(&gsi, zor, fonts);
 
         } // end rendering
         EndDrawing();

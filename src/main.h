@@ -142,6 +142,7 @@ typedef struct {
     int n_turn;
     int max_turns; // max turns per 'turn'
     bool sync_move;
+    bool is_swapping;
 
     bool attack_damage_given; // when the attack damage is complete
     int cur_room;
