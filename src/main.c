@@ -1542,8 +1542,8 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
             //ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
             break;
         case ENT_FLY: {
-            // ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
-            ent->state = SKIP_TURN;
+            ai_simple_follow_melee_attack(ent, player, entity_data, map_data);
+            // ent->state = SKIP_TURN;
             break;
         }
         case ENT_FANTANO: {
@@ -1726,7 +1726,7 @@ void process_entity_turn_queue(GameStateInfo* gsi, EntityData* entity_data, Item
         for (int i = 0; i < entity_data->entity_counter; i++) {
             Entity* ent = &entity_data->entities[i];
 
-            if (!ent->sync_move)
+            if (!ent->sync_move && !ent->is_swapping)
                 continue;
 
             if (is_entity_dead(ent)) {
@@ -1827,7 +1827,7 @@ void run_enchanted_groves_dungeon(GameStateInfo* gsi, EntityData* entity_data, I
 		create_entity_instance(entity_data, default_ent_zor());
 
 		zor = GET_LAST_ENTITY_REF();
-		zor->max_turns = 1;
+		zor->max_turns = 2;
 		printf("Zor cur room: %i\n", zor->cur_room);
 
 		create_entity_instance(entity_data, create_fantano_entity());
@@ -2225,9 +2225,9 @@ int main(void/*int argc, char* argv[]*/) {
                     for (int e = 0; e < entity_data.entity_counter; e++) {
                         Entity* ent = &entity_data.entities[e];
 
-                        // if (e != 0) {
-                        //     if (!is_entity_visible(zor, ent, &map_data, false)) continue;
-                        // }
+                        if (e != 0) {
+                            if (!is_entity_visible(zor, ent, &map_data, false)) continue;
+                        }
 
                         //Vector2 text_pos = position_to_grid_position(ent->position);
 
