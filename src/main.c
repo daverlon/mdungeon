@@ -525,6 +525,7 @@ void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, Ite
                 } 
                 else {
                     entity_data->entities[swapi].is_swapping = true;
+                    entity_data->entities[swapi].direction = vector_to_direction(Vector2Subtract(ent->position, entity_data->entities[swapi].position));
                     ent->state = MOVE;
                     return;
                 }
@@ -1529,6 +1530,12 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
         control_entity(ent, map_data, entity_data, item_data, grid_mouse_position);
     }
     else {
+        if (ent->is_swapping) {
+            // ent->sync_move = true;
+            ent->state = MOVE;
+            return;
+        }
+
         switch (ent->ent_type) {
         case ENT_ZOR:
             ent->state = SKIP_TURN;
@@ -1540,14 +1547,7 @@ void entity_think(Entity* ent, Entity* player, MapData* map_data, EntityData* en
             break;
         }
         case ENT_FANTANO: {
-            if (ent->is_swapping) {
-                // ent->sync_move = true;
-                ent->state = MOVE;
-            }
-            else {
-                ent->state = SKIP_TURN;
-            }
-            // ai_fantano_teleport_to_same_room_as_player_and_defend(ent, player, entity_data, map_data, item_data);
+            ai_fantano_teleport_to_same_room_as_player_and_defend(ent, player, entity_data, map_data, item_data);
             break;
         }
         default:
@@ -2225,9 +2225,9 @@ int main(void/*int argc, char* argv[]*/) {
                     for (int e = 0; e < entity_data.entity_counter; e++) {
                         Entity* ent = &entity_data.entities[e];
 
-                        if (e != 0) {
-                            if (!is_entity_visible(zor, ent, &map_data, false)) continue;
-                        }
+                        // if (e != 0) {
+                        //     if (!is_entity_visible(zor, ent, &map_data, false)) continue;
+                        // }
 
                         //Vector2 text_pos = position_to_grid_position(ent->position);
 
