@@ -6,6 +6,8 @@
 #include "main.h"
 #include "pathfinding.h"
 
+#define INT_MAX 9999
+
 extern bool any_entity_exists_on_tile(int col, int row, const EntityData* entity_data, Entity* ignore, int* out);
 
 bool isValid(Point point, int cols, int rows) {

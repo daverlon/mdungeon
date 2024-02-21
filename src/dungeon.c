@@ -107,8 +107,8 @@ void generate_rooms(MapData* map_data) {
 int get_room_id_at_position(int x, int y, MapData* map_data) {
     for (int i = 0; i < map_data->n_sectors; i++) {
         Room* rm = &map_data->rooms[i];
-        if (((x >= rm->x && x < rm->x + rm->cols)
-            && (y >= rm->y && y < rm->y + rm->rows))) {
+        if (((x >= rm->x && x <= rm->x + rm->cols)
+            && (y >= rm->y && y <= rm->y + rm->rows))) {
             return i;
         }
     }

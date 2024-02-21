@@ -72,7 +72,7 @@ Entity create_fly_entity() {
 		.can_pickup = false,
 
 		.original_position = (Vector2){0.0f, 0.0f},
-		.can_swap_positions = false,
+		.can_swap_positions = true,
 
 		.n_turn = 0,
 		.max_turns = 1,
@@ -114,7 +114,7 @@ Entity create_fantano_entity() {
 		.can_pickup = false,
 
 		.original_position = (Vector2){0.0f, 0.0f},
-		.can_swap_positions = false,
+		.can_swap_positions = true,
 
 		.n_turn = 0,
 		.max_turns = 1,

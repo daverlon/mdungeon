@@ -142,7 +142,7 @@ void set_entity_position(Entity* ent, Vector2 pos) {
     //map_data->tiles[(int)pos.x][(int)pos.y].reserved = true;
 }
 
-Vector2 get_tile_infront_entity(Entity* ent) {
+Vector2 get_tile_infront_entity(const Entity* ent) {
     return Vector2Add(ent->original_position, direction_to_vector2(ent->direction));
 }
 
@@ -265,7 +265,7 @@ void spawn_items_on_random_tiles(Item item, ItemData* item_data, const MapData* 
 
 void nullify_all_items(ItemData* item_data) {
     for (int i = 0; i < MAX_INSTANCES; i++) {
-        item_data->items[i] = (Item){ ITEM_NOTHING, ITEMCAT_NOTHING, (Vector2) { 0, 0 } };
+        item_data->items[i] = (Item){ ITEM_NOTHING, ITEMCAT_NOTHING, (Vector2) { 0, 0 }, 100 };
     }
     item_data->item_counter = 0;
     printf("Set every item to ITEM_NOTHING\n");
@@ -328,7 +328,7 @@ Vector2 get_active_position(Entity* ent) {
 bool any_entity_exists_on_tile(int col, int row, const EntityData* entity_data, Entity* ignore, int* out) {
     Vector2 pos = (Vector2){ col, row };
     for (int i = 0; i < entity_data->entity_counter; i++) {
-        Entity* ent = &entity_data->entities[i];
+        const Entity* ent = &entity_data->entities[i];
 
         if (ignore != NULL && ent == ignore) continue;
 
@@ -367,7 +367,7 @@ void reset_entity_state(Entity* ent, bool use_turn) {
     ent->is_swapping = false;
 }
 
-void move_entity_forward(Entity* ent, MapData* map_data) {
+void move_entity_forward(Entity* ent/*,MapData* map_data*/) {
     //if (ent->state != MOVE) return;
 
     const Vector2 movement = direction_to_vector2(ent->direction);
@@ -518,7 +518,7 @@ void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, Ite
         int swapi = -1;
         if (any_entity_exists_on_tile(i_targ_x, i_targ_y, entity_data, ent, &swapi)) {
             //printf("Tried to walk on tile with entity\n");
-            if (swapi != -1)
+            if (swapi != -1) {
                 if (!entity_data->entities[swapi].can_swap_positions) {
                     reset_entity_state(ent, false);
                     return;
@@ -529,7 +529,7 @@ void control_entity(Entity* ent, MapData* map_data, EntityData* entity_data, Ite
                     ent->state = MOVE;
                     return;
                 }
-
+            }
         }
 
         switch (map_data->tiles[i_targ_x][i_targ_y].type) {
@@ -616,8 +616,8 @@ Vector2 position_to_grid_position(Vector2 pos) {
 
 void render_entity(Entity* ent, Font* fonts, EntityData* entity_data) {
     Vector2 grid_position = position_to_grid_position(ent->position);
-    Vector2 grid_original_position = position_to_grid_position(ent->original_position);
-    Vector2 grid_infront_position = position_to_grid_position(get_tile_infront_entity(ent));
+    // Vector2 grid_original_position = position_to_grid_position(ent->original_position);
+    // Vector2 grid_infront_position = position_to_grid_position(get_tile_infront_entity(ent));
     // printf("[%i,%i] -> [%i,%i]\n", (int)ent->position.x, (int)ent->position.y, (int)gridPosition.x, (int)gridPosition.y);
     // printf("%i\n", ent->animation.yOffset);
 
@@ -994,7 +994,7 @@ void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
         char txt[16];
         get_item_name(player->inventory[item_i].type, txt);
 
-        Vector2 fs = MeasureTextEx(fonts[0], txt, font_size, 1.0f);
+        // Vector2 fs = MeasureTextEx(fonts[0], txt, font_size, 1.0f);
         //x = window_width - 30 - fs.x - 3;
 
         DrawTextEx(fonts[0], txt, (Vector2) { x + 4, y + 2 }, font_size, 1.0f, Fade(BLACK, 0.7f));
@@ -1015,7 +1015,7 @@ void render_ui(GameStateInfo* gsi, Entity* player, Font* fonts) {
     {
         const int gap = 30 * scaling;
         const int c = player->inventory_item_count;
-        int size = 30 * scaling;
+        // int size = 30 * scaling;
         int xx = 30;
 
         for (int i = 0; i < c; i++) {
@@ -1283,7 +1283,7 @@ bool is_item_visible(Entity* from, Item* item, MapData* map_data) {
 //extern void aStarSearch(MapData* map, PathList* path_list, Point src, Point dest, Entity src_ent, bool cut_world_corners);
 
 PathList find_path_around_ents(Entity* from_ent, Vector2 to_pos, bool cut_world_corners, MapData* map_data, EntityData* entity_data) {
-        PathList path_list = { .path = { 0 }, .length = 0 };
+        PathList path_list = { .path = NULL, .length = 0 };
 
         astar_around_ents(
             map_data,
@@ -1292,20 +1292,20 @@ PathList find_path_around_ents(Entity* from_ent, Vector2 to_pos, bool cut_world_
             vector2_to_point(from_ent->original_position),
             vector2_to_point(to_pos),
             from_ent,
-            false);
+            cut_world_corners);
 
         return path_list;
 }
 
-PathList find_path_through_ents(Entity* from_ent, Vector2 to_pos, bool cut_world_corners, MapData* map_data, EntityData* entity_data) {
-    PathList path_list = { .path = { 0 }, .length = 0 };
+PathList find_path_through_ents(Entity* from_ent, Vector2 to_pos, bool cut_world_corners, MapData* map_data) {
+    PathList path_list = { .path = NULL, .length = 0 };
 
     astar_through_ents(
         map_data,
         &path_list,
         vector2_to_point(from_ent->original_position),
         vector2_to_point(to_pos),
-        false);
+        cut_world_corners);
 
     return path_list;
 }
@@ -1324,8 +1324,8 @@ void apply_damage(Entity* to, Entity* from, int amount, bool change_direction, b
         1.0f, 1.0f
     });
 
-    /*if (change_direction && to->state == IDLE && !Vector2Equals(direction, (Vector2){0.0f, 0.0f}))
-        to->direction = vector_to_direction(direction);*/
+    if (change_direction && to->state == IDLE && !Vector2Equals(direction, (Vector2){0.0f, 0.0f}))
+        to->direction = vector_to_direction(direction);
 
     from->attack_damage_given = true;
     to->found_target = true; // for ai
@@ -1361,15 +1361,11 @@ void ai_simple_follow_melee_attack(Entity* ent, Entity* target, EntityData* enti
         return;
     }
 
-    // get active target position
-    Vector2 active = { 0 };
-    
     PathList path_list = find_path_through_ents(
         ent,
         get_active_position(target),
         false,
-        map_data,
-        entity_data
+        map_data
     );
     if (path_list.unreachable) {
         ent->state = SKIP_TURN;
@@ -1591,7 +1587,7 @@ int value_variation(float value, int percentage) {
 
     float fval = roundf(value);
     fval *= vf;
-    return (int)roundf(value);
+    return (int)roundf(fval);
 }
 
 int get_melee_attack_damage(Entity* ent, int* self_damage, bool* crit) {
@@ -1676,7 +1672,7 @@ void process_attack(Entity* ent, EntityData* entity_data) {
     }
 }
 
-void process_entity_state(Entity* ent, EntityData* entity_data, MapData* map_data) {
+void process_entity_state(Entity* ent, EntityData* entity_data) {
     switch (ent->state) {
     case IDLE: {
         // not really supposed to trigger here
@@ -1688,7 +1684,7 @@ void process_entity_state(Entity* ent, EntityData* entity_data, MapData* map_dat
         break;
     }
     case MOVE: {
-        move_entity_forward(ent, map_data);
+        move_entity_forward(ent);
         break;
     }
     case ATTACK_MELEE: {
@@ -1753,7 +1749,7 @@ void process_entity_turn_queue(GameStateInfo* gsi, EntityData* entity_data, Item
                     entity_think(ent, zor, map_data, entity_data, item_data, gsi->grid_mouse_position);
                 }
 
-                process_entity_state(ent, entity_data, map_data);
+                process_entity_state(ent, entity_data);
             }
         }
     }
@@ -1792,7 +1788,7 @@ void process_entity_turn_queue(GameStateInfo* gsi, EntityData* entity_data, Item
             if (is_entity_dead(this_ent))
                 this_ent->state = IDLE;
 
-            process_entity_state(this_ent, entity_data, map_data);
+            process_entity_state(this_ent, entity_data);
 
             // entity finished turn?
             if (entity_finished_turn(this_ent)) {
@@ -1841,9 +1837,9 @@ void run_enchanted_groves_dungeon(GameStateInfo* gsi, EntityData* entity_data, I
 
 		// init items
 		nullify_all_items(item_data);
-		spawn_items_on_random_tiles((Item) { ITEM_STICK, ITEMCAT_WEAPON },  item_data,  map_data, 5, 8);
-		spawn_items_on_random_tiles((Item) { ITEM_APPLE, ITEMCAT_CONSUMABLE },  item_data,  map_data, 4, 7);
-		spawn_items_on_random_tiles((Item) { ITEM_SPILLEDCUP, ITEMCAT_CONSUMABLE },  item_data,  map_data, 2, 4);
+		spawn_items_on_random_tiles((Item) { ITEM_STICK, ITEMCAT_WEAPON, (Vector2){0.0f, 0.0f}, 100 },  item_data,  map_data, 5, 8);
+		spawn_items_on_random_tiles((Item) { ITEM_APPLE, ITEMCAT_CONSUMABLE, (Vector2){0.0f, 0.0f}, 100 },  item_data,  map_data, 4, 7);
+		spawn_items_on_random_tiles((Item) { ITEM_SPILLEDCUP, ITEMCAT_CONSUMABLE, (Vector2){0.0f, 0.0f}, 100 },  item_data,  map_data, 2, 4);
 
 		for (int i = 0; i < entity_data->entity_counter; i++) {
 			Entity* ent = &entity_data->entities[i];
@@ -1890,7 +1886,7 @@ int main(void/*int argc, char* argv[]*/) {
     SetRandomSeed(100);
 
     Font fonts[1] = { 
-        LoadFontEx("res/fonts/YanoneKaffeesatz-Regular.ttf", 144, NULL, NULL) 
+        LoadFontEx("res/fonts/YanoneKaffeesatz-Regular.ttf", 144, NULL, 0) 
     };
     SetTextureFilter(fonts[0].texture, TEXTURE_FILTER_POINT);
 
@@ -1917,10 +1913,6 @@ int main(void/*int argc, char* argv[]*/) {
     RenderTexture2D fog_texture = LoadRenderTexture(gsi.window_width, gsi.window_height);
 
     MapData map_data = { 0 };
-
-    int cur_turn_entity_index = 0;
-    int cur_turn = 1;
-    //int cur_room = -1;
 
     // main loop
     while (!WindowShouldClose()) {
