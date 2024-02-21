@@ -2083,7 +2083,6 @@ int main(void/*int argc, char* argv[]*/) {
                 DrawTexture(map_data.dungeon_texture.texture, 0, 0, WHITE);
                 for (int row = 0; row < map_data.rows; row++) {
                     for (int col = 0; col < map_data.cols; col++) {
-                        Color clr = LIGHTGREEN;
                         if (IsKeyDown(KEY_SPACE) && map_data.tiles[col][row].type != TILE_WALL) {
                             Color clr = BLACK_SEMI_TRANSPARENT;
 
