@@ -5,8 +5,10 @@ echo -------------------
 gcc -Wall                   \
     -W                      \
     -Wpedantic              \
+    -g                      \
     src/main.c              \
     src/dungeon.c           \
+    src/pathfinding.c       \
     -o bin/game             \
     -Idependencies/include  \
     -Ldependencies/lib      \
