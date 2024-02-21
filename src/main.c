@@ -136,7 +136,7 @@ enum Direction vector_to_direction(Vector2 vector) {
     return DOWN;
 }
 
-void set_entity_position(Entity* ent, Vector2 pos, MapData* map_data) {
+void set_entity_position(Entity* ent, Vector2 pos) {
     ent->position = pos;
     ent->original_position = pos;
     //map_data->tiles[(int)pos.x][(int)pos.y].reserved = true;
@@ -1517,7 +1517,7 @@ void ai_fantano_teleport_to_same_room_as_player_and_defend(Entity* ent, Entity* 
         }
         if (block) continue;
 
-        set_entity_position(ent, (Vector2) { col, row }, map_data);
+        set_entity_position(ent, (Vector2) { col, row });
         ent->state = SKIP_TURN;
         break;
     }
@@ -1848,7 +1848,7 @@ void run_enchanted_groves_dungeon(GameStateInfo* gsi, EntityData* entity_data, I
 		for (int i = 0; i < entity_data->entity_counter; i++) {
 			Entity* ent = &entity_data->entities[i];
 			reset_entity_state(ent, false);
-			set_entity_position(ent, find_random_empty_floor_tile(map_data, item_data, entity_data), map_data);
+			set_entity_position(ent, find_random_empty_floor_tile(map_data, item_data, entity_data));
 		}
 
 		zor->cur_room = get_room_id_at_position((int)zor->original_position.x, (int)zor->original_position.y, map_data);
