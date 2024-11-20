@@ -1,5 +1,7 @@
 #include "utils.h"
 
+#include <stdio.h>
+
 Vector2 direction_to_vector2(enum Direction direction) {
     switch (direction) {
     case DOWN:
@@ -87,4 +89,36 @@ int value_variation(float value, int percentage) {
     float fval = roundf(value);
     fval *= vf;
     return (int)roundf(fval);
+}
+
+Vector2 get_active_position(Entity* ent) {
+    switch (ent->state) {
+    case MOVE:
+        //return ent->position;
+        return get_tile_infront_entity(ent);
+        //return ent->position;
+        break;
+        /*case ATTACK_MELEE:
+            return ent->original_position;*/
+        break;
+    default:
+        break;
+    }
+    if (ent->is_swapping) return get_tile_infront_entity(ent);
+    return ent->original_position;
+}
+
+void print_vector2(Vector2 vec) {
+    printf("Vector2: (%.8f, %.8f)\n", vec.x, vec.y);
+}
+
+Vector2 position_to_grid_position(Vector2 pos) {
+    Vector2 gridPos = Vector2Multiply(pos, (Vector2) { TILE_SIZE, TILE_SIZE });
+
+    // Center the entity within the grid cell
+    gridPos.x += (TILE_SIZE - SPRITE_SIZE) / 2;
+    gridPos.y += (TILE_SIZE - SPRITE_SIZE) / 2;
+    gridPos.y -= SPRITE_SIZE / 4;
+
+    return gridPos;
 }

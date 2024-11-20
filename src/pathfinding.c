@@ -1,10 +1,13 @@
+#include "pathfinding.h"
+
+#include "utils.h"
+#include "main.h"
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 // #include <math.h>
 
-#include "main.h"
-#include "pathfinding.h"
 
 #define INT_MAX 9999
 
@@ -55,12 +58,13 @@ bool isInPathList(PathList* pathList, Point p) {
     return false;
 }
 
-// todo:
-// rewrite in snake_case
-extern Vector2 get_tile_infront_entity(Entity* ent);
-extern Point vector2_to_point(Vector2 vec);
-extern Vector2 point_to_vector2(Point point);
+Point vector2_to_point(Vector2 vec) {
+    return (Point) { (int)vec.x, (int)vec.y };
+}
 
+Vector2 point_to_vector2(Point point) {
+    return (Vector2) { point.x, point.y };
+}
 
 void astar_around_ents(MapData* map, EntityData* entity_data, PathList* path_list, Point src, Point dest, Entity* src_ent, bool cut_world_corners) {
 
@@ -326,4 +330,32 @@ void astar_through_ents(MapData* map, PathList* pathList, Point src, Point dest,
         free(nodeDetails[i]);
     }
     free(nodeDetails);
+}
+
+PathList find_path_around_ents(Entity* from_ent, Vector2 to_pos, bool cut_world_corners, MapData* map_data, EntityData* entity_data) {
+        PathList path_list = { .path = NULL, .length = 0 };
+
+        astar_around_ents(
+            map_data,
+            entity_data,
+            &path_list,
+            vector2_to_point(from_ent->original_position),
+            vector2_to_point(to_pos),
+            from_ent,
+            cut_world_corners);
+
+        return path_list;
+}
+
+PathList find_path_through_ents(Entity* from_ent, Vector2 to_pos, bool cut_world_corners, MapData* map_data) {
+    PathList path_list = { .path = NULL, .length = 0 };
+
+    astar_through_ents(
+        map_data,
+        &path_list,
+        vector2_to_point(from_ent->original_position),
+        vector2_to_point(to_pos),
+        cut_world_corners);
+
+    return path_list;
 }

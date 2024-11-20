@@ -1,5 +1,15 @@
 #include "systems/animation.h"
 
+void switch_to_idle_y_offset(Entity* ent) {
+    if (ent->animation.y_offset != 0) {
+        ent->cur_move_anim_extra_frame++;
+    }
+    if (ent->cur_move_anim_extra_frame >= MOVE_ANIMATION_EXTRA_FRAMES) {
+        //ent->animation.max_frame_time = 0.02f;
+        ent->animation.y_offset = 0;
+    }
+}
+
 void update_animation_state(Entity* ent) {
     switch (ent->ent_type) {
     case ENT_ZOR: {
