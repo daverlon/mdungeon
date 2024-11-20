@@ -162,6 +162,13 @@ typedef struct {
     bool crit;
 } Entity;
 
+typedef struct {
+    Entity* ent;
+    int turns_left;
+    bool moving;
+} EntityTurn;
+#define MAX_ENTITY_TURNS 32
+
 #define MOVE_ANIMATION_EXTRA_FRAMES 3
 
 #define MAX_DAMAGE_POPUPS 32
@@ -176,6 +183,8 @@ typedef struct {
 typedef struct {
     Entity entities[MAX_INSTANCES];
     int entity_counter;
+
+    bool finished_thinking;
 
     // shouldnt be anymore than 2 at once
     DamagePopup damage_popups[MAX_DAMAGE_POPUPS];
