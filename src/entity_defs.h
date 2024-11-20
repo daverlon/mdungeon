@@ -4,8 +4,8 @@
 
 #include "main.h"
 
-//#define LOAD_FANTANO_TEXTURE() (LoadTexture("res/fantano/fantano_idle.png"))
-//#define LOAD_CYHAR_TEXTURE() (LoadTexture("res/cyhar/cyhar_idle.png"))
+//#define LOAD_FANTANO_TEXTURE() (LoadTexture("dependencies/res/fantano/fantano_idle.png"))
+//#define LOAD_CYHAR_TEXTURE() (LoadTexture("dependencies/res/cyhar/cyhar_idle.png"))
 
 Entity default_ent_zor() {
 
@@ -16,7 +16,7 @@ Entity default_ent_zor() {
 	Entity ent = (Entity){
 		.ent_type = ENT_ZOR,
 		.position = (Vector2){0.0f, 0.0f},
-		.texture = LoadTexture("res/zor/zor_spritesheet.png"),
+		.texture = LoadTexture("dependencies/res/zor/zor_spritesheet.png"),
 
 		.animation = anim,
 		.state = IDLE,
@@ -57,7 +57,7 @@ Entity create_fly_entity() {
 	Entity ent = (Entity){
 		.ent_type = ENT_FLY,
 		.position = (Vector2){0.0f, 0.0f},
-		.texture = LoadTexture("res/entities/fly.png"),
+		.texture = LoadTexture("dependencies/res/entities/fly.png"),
 
 		.animation = anim,
 		.state = IDLE,
@@ -99,7 +99,7 @@ Entity create_fantano_entity() {
 	Entity ent = (Entity){
 		.ent_type = ENT_FANTANO,
 		.position = (Vector2){0.0f, 0.0f},
-		.texture = LoadTexture("res/fantano/fantano_idle.png"),
+		.texture = LoadTexture("dependencies/res/fantano/fantano_idle.png"),
 
 		.animation = anim,
 		.state = IDLE,

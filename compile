@@ -6,10 +6,10 @@ gcc -Wall                   \
     -W                      \
     -Wpedantic              \
     -g                      \
-    src/main.c              \
-    src/dungeon.c           \
-    src/pathfinding.c       \
+    src/*.c                 \
+    src/systems/*.c         \
     -o bin/game             \
+    -Iinclude               \
     -Idependencies/include  \
     -Ldependencies/lib      \
     -lraylib
